@@ -2,7 +2,7 @@
 
 ---
 
-### **0 – Pre-Game**
+### **0 Pre-Game**
 
 - [ ] Confirm all team roles and communication channels
 - [ ] Identify scored services and assign watchers (scoring engine may appear as an unknown user)
@@ -22,7 +22,7 @@
 
 ---
 
-### **1 – Assessment**
+### **1 Assessment**
 
 - [ ] Inventory all systems and running services
 - [ ] Map network connectivity (no VLAN segmentation)
@@ -31,7 +31,7 @@
 
 ---
 
-### **2 – Access Control**
+### **2 Access Control**
 
 - [ ] Audit all user accounts, groups, and privileges
 - [ ] Treat unknown accounts as potentially scored; avoid deletions without validation
@@ -40,7 +40,7 @@
 
 ---
 
-### **3 – Services & Persistence**
+### **3 Services & Persistence**
 
 - [ ] Disable all non-essential or redundant services
 - [ ] Review configurations for all scored services
@@ -48,7 +48,7 @@
 
 ---
 
-### **4 – Network**
+### **4 Network**
 
 - [ ] Verify open ports align with the scoreboard
 - [ ] Configure firewalls for default-deny inbound; allow only scored and management traffic
@@ -57,7 +57,7 @@
 
 ---
 
-### **5 – File System**
+### **5 File System**
 
 - [ ] Identify dangerous permissions, SUID/SGID files, and recent unauthorized changes
 - [ ] Clean webroots of shells, backdoors, or unsafe upload handlers
@@ -65,7 +65,7 @@
 
 ---
 
-### **6 – Logging & Monitoring**
+### **6 Logging & Monitoring**
 
 - [ ] Enable and centralize logs
 - [ ] Configure log rotation and retention
@@ -74,7 +74,7 @@
 
 ---
 
-### **7 – System Hardening**
+### **7 System Hardening**
 
 - [ ] Apply patches to critical and remotely exploitable services
 - [ ] Enforce secure OS and service defaults
@@ -82,7 +82,7 @@
 
 ---
 
-### **8 – Application Security**
+### **8 Application Security**
 
 - [ ] Harden web and database configurations
 - [ ] Enforce strong credentials and principle of least privilege
@@ -91,7 +91,7 @@
 
 ---
 
-### **9 – Backup & Recovery**
+### **9 Backup & Recovery**
 
 - [ ] Create live backups of configurations and critical data
 - [ ] Verify backup integrity and storage location security
@@ -99,7 +99,7 @@
 
 ---
 
-### **10 – Continuous Operations**
+### **10 Continuous Operations**
 
 - [ ] Continuously verify all scored services remain operational
 - [ ] Monitor for new IOCs and block malicious IPs
