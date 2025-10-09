@@ -25,12 +25,4 @@ Netbird used for VPN. You must preinstall this on the system you are competing f
 - Doesn't mean there aren't local accounts that should be investigated, but count on root/admin accounts authenticating through AD.
 
  ## Environment VMs / Services
- - Balrog (Router) -- Alpine Linux
- - Charon (Docker Registry)
- - Brassknuckles (Mail)
- - Nix (Web server)
- - Kerberos (Active Directory) -- Windows
- - Cthulu (Sat Control) -- Windows
- - Tartarus (Rover Control)
- - Pandemonium (Gitea)
- - Donut (Load Balancer)
+ **See Attached PDF**
