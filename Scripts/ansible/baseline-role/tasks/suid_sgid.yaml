@@ -1,0 +1,8 @@
+---
+- name: Remove suid/sgid bit from binaries in blacklist
+  ansible.builtin.file:
+    path: "{{ uid_sgid_system_blacklist }}"
+    mode: a-s
+    state: file
+    follow: true
+  failed_when: false
