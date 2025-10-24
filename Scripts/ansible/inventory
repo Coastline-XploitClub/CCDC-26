@@ -6,23 +6,16 @@
 #   - As script is run, place them under the `linux` group
 #   - ONCE CONFIGURED, run the `removekeys.yaml` playbook (takes a while, ensure correct admin_user configured)
 
-# Vanilla boxes that have ssh as a scored service
-[vanilla_linux_ssh]
+
+[vanilla_linux_ssh] # Unconfigured boxes that have ssh as a scored service
 # toonami   ansible_host=192.168.220.101
-nix  ansible_host=10.100.118.44
-pandemonium  ansible_host=10.100.118.42
-tartarus  ansible_host=10.100.118.221
 
-# Vanilla boxes that will run full baseline config
-[vanilla_linux]
+
+[vanilla_linux] # Unconfigured boxes that will run full baseline config
 # toonami     ansible_host=192.168.220.101
-balrog  ansible_host=10.100.118.2
-brassknuckles  ansible_host=10.100.118.231
-donut  ansible_host=10.100.118.234
-charon  ansible_host=10.100.118.13
 
-# Configured boxes (for key-based auth)
-[linux]
+
+[linux] # Configured boxes (for key-based auth)
 # eddieneddy ansible_host=192.168.220.13
 
 

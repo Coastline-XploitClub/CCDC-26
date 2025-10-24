@@ -34,6 +34,6 @@
 
 - name: Change to bash shell
   ansible.builtin.user:
-    name: ccdcadmin
+    name: '{{ admin_user }}'
     shell: /bin/bash
   when: bash_exists
