@@ -1,0 +1,20 @@
+---
+# Baseline configuration for linux boxes
+### vanilla_linux
+### linux
+- hosts: vanilla_linux 
+  become: true
+  vars:
+    ansible_host_key_checking: false
+  roles:
+    - baseline-security
+
+# Hosts that have scored ssh
+# - hosts: vanilla_linux_ssh
+#   become: true
+#   vars:
+#     ansible_host_key_checking: false
+#     disable_root: false
+#     disable_password: false
+#   roles:
+#     - baseline-security

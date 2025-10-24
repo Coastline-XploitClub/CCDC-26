@@ -1,0 +1,40 @@
+###############
+## INVENTORY ##
+###############
+# Procedure:
+#   - Place all boxes in the `vanilla_linux` or `_ssh` group
+#   - As script is run, place them under the `linux` group
+#   - ONCE CONFIGURED, run the `removekeys.yaml` playbook (takes a while, ensure correct admin_user configured)
+
+# Vanilla boxes that have ssh as a scored service
+[vanilla_linux_ssh]
+# toonami   ansible_host=192.168.220.101
+nix  ansible_host=10.100.118.44
+pandemonium  ansible_host=10.100.118.42
+tartarus  ansible_host=10.100.118.221
+
+# Vanilla boxes that will run full baseline config
+[vanilla_linux]
+# toonami     ansible_host=192.168.220.101
+balrog  ansible_host=10.100.118.2
+brassknuckles  ansible_host=10.100.118.231
+donut  ansible_host=10.100.118.234
+charon  ansible_host=10.100.118.13
+
+# Configured boxes (for key-based auth)
+[linux]
+# eddieneddy ansible_host=192.168.220.13
+
+
+###############
+## VARIABLES ##
+###############
+
+[vanilla_linux:vars]
+ansible_user=root
+ansible_password=GibM3Money123!
+
+[linux:vars]
+ansible_user=ccdcadmin
+ansible_ssh_private_key_file=~/.ssh/ccdc_ssh_key
+ansible_group_priority=100  # These vars take precedence over same-named vars when host is in multiple groups
