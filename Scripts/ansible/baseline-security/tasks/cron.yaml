@@ -1,0 +1,38 @@
+# Taken from dev-sec/ansible-collection-hardening
+# Hardens permissions on crontabs
+- name: Find system crontabs/dirs
+  ansible.builtin.find:
+    paths:
+      - /etc
+    patterns:
+      - cron.hourly
+      - cron.daily
+      - cron.weekly
+      - cron.monthly
+      - cron.d
+      - crontab
+    file_type: any
+  register: cron_directories
+
+- name: Configure permissions on system crontabs
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: og-rwx
+  with_items: "{{ cron_directories.files }}"
+
+- name: Find user crontabs
+  ansible.builtin.find:
+    paths:
+      - /var/spool/cron/crontabs
+    file_type: file
+  register: user_crontabs
+
+- name: Configure permissions on user crontabs
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: "{{ item.path | basename }}"
+    group: crontab
+    mode: '0600'
+  with_items: "{{ user_crontabs.files }}"

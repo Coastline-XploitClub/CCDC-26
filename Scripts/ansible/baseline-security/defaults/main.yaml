@@ -1,0 +1,51 @@
+# Superuser that has SSH login permitted
+admin_user: ccdcadmin
+
+# Skip all tasks and reupload the SSH public key only
+rotate_pubkey: false
+
+# Disable password auth and root login on SSH (true), or skip (false)
+disable_root: true
+disable_password: true
+
+
+# Install Python on all systems
+bootstrap: false
+
+# Enable logging high-volume events in auditd
+auditd_highvolumeevents: false
+
+############################
+###   ADVANCED OPTIONS   ###
+############################
+
+# Blacklist for SUID/SGID entries to be removed
+# Taken from dev-sec/ansible-collection-hardening
+uid_sgid_system_blacklist:
+  # blacklist as provided by NSA
+  - /usr/bin/rcp
+  - /usr/bin/rlogin
+  - /usr/bin/rsh
+  # sshd must not use host-based authentication (see ssh cookbook)
+  - /usr/libexec/openssh/ssh-keysign
+  - /usr/lib/openssh/ssh-keysign
+  # misc others
+  - /sbin/netreport # not normally required for user
+  - /usr/sbin/usernetctl # modify interfaces via functional accounts
+  # connecting to ...
+  - /usr/sbin/userisdnctl # no isdn...
+  - /usr/sbin/pppd # no ppp / dsl ...
+  # lockfile
+  - /usr/bin/lockfile
+  - /usr/bin/mail-lock
+  - /usr/bin/mail-unlock
+  - /usr/bin/mail-touchlock
+  - /usr/bin/dotlockfile
+  # need more investigation blacklist for now
+  - /usr/bin/arping
+  - /usr/sbin/uuidd
+  - /usr/bin/mtr # investigate current state...
+  - /usr/lib/evolution/camel-lock-helper-1.2 # investigate current state...
+  - /usr/lib/pt_chown # pseudo-tty needed?
+  - /usr/lib/eject/dmcrypt-get-device
+  - /usr/lib/mc/cons.saver # midnight commander screensaver

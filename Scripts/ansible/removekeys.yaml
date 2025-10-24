@@ -1,0 +1,21 @@
+# Removes keys for all users that are not the designated admin user
+# REMEMBER TO SET THE RIGHT ADMIN USER TO PREVENT LOCKOUT!
+---
+- hosts: linux 
+  become: true
+  tasks:
+    - name: Read passwd file
+      ansible.builtin.getent:
+        database: passwd
+
+    - name: Get user home directories
+      ansible.builtin.set_fact:
+        users: "{{ getent_passwd.keys()|list }}"
+
+    - name: Remove SSH keys for all users
+      ansible.builtin.file:
+        path: "{{ getent_passwd[item][4] }}/.ssh/authorized_keys"
+        state: absent
+      with_items:
+        - "{{users}}"
+      when: getent_passwd[item][4] != "/home/ccdcadmin"  # CHANGE ME IF NEEDED!

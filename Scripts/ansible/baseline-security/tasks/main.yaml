@@ -1,0 +1,36 @@
+---
+# - name: Import Python bootstrap task
+#   import_tasks: bootstrap.yaml
+#   when: bootstrap == true
+
+- name: Import sudo task
+  import_tasks: sudo.yaml
+  when: rotate_pubkey == false
+  ignore_errors: true
+
+- name: Import users task
+  import_tasks: users.yaml
+  
+- name: Import cron task
+  import_tasks: cron.yaml
+  when: rotate_pubkey == false
+  ignore_errors: true
+
+- name: Import SUID/SGID task
+  import_tasks: suid_sgid.yaml
+  when: rotate_pubkey == false
+  ignore_errors: true
+
+- name: Import auditd task
+  import_tasks: auditd.yaml
+  when: rotate_pubkey == false
+  ignore_errors: true
+
+- name: Import login_defs task
+  import_tasks: login_defs.yaml
+  when: rotate_pubkey == false
+
+- name: Import sshd task
+  import_tasks: sshd.yaml
+  when: rotate_pubkey == false
+
