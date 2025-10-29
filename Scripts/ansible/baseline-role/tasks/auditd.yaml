@@ -14,6 +14,12 @@
   tags: auditd
   when: (ansible_facts['os_family'] == "Alpine") or (ansible_facts['os_family'] == "Archlinux") or (ansible_facts['os_family'] == "RedHat") or (ansible_facts['os_family'] == "Suse")
 
+- name: Ensure auditd rules location exists
+  ansible.builtin.file:
+    path: /etc/audit/rules.d
+    state: directory
+    recurse: yes
+
 - name: Copy auditd rules
   ansible.builtin.template:
     src: audit.rules.j2
