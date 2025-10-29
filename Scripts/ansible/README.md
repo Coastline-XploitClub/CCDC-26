@@ -29,108 +29,67 @@ cat /var/log/audit/audit.log
 
 > 🛑 These events most likely require investigation
 
-**`etcgroup`, `etcpasswd`, `opasswd`, `group_modification`, `passwd_modification`, `user_modification`**
-- Modifying group, passwd, gshadow, shadow, or /etc/security/opasswd files
-- Using passwd command
-- Using and user modification commands
-
-**`actions`**
-- Editing sudoers files
-
-**`remote_shell`**
-- Remote shell use (bash)
-
-**`sbin_susp`**
-- Suspicious sbin usage (ex. iptables, ufw, traceroute)
-
-**`susp_shell`**
-- Suspicious shell usage (ex. tmux)
-
-**`recon`**
-- Common reconnaissance commands (ex. whoami)
-- Some `id` commands may be false positives--check PPID in `ps`
-
-**`susp_activity`**
-- Suspicious activity (ex. netcat, nmap, wireshark)
+**`high`**
+- High criticality events
+- Cron/user/group changes
+- Network/SSHD/root SSH key changes
 
 **`power`**
 - Messing with power state (reboot, shutdown, etc.)
 
-**`sshd`, `rootkey`**
-- Changing SSH configs
-- Tampering with root and admin user SSH key
+**`ps`**
+- Forked processes and network activity
 
 ### Important events
 
 > ⚠️ These events **may or may not** require investigation
 
-**`sysctl`, `modules`, `modprobe`**
-- Changing kernel settings and modules
+**`medium`**
+- Medium severity rules
+- Changing system startup scripts (init)
+- Modifying/viewing firewall rules
+- Modifying shell/profile configurations
+- Use of ptrace
+- Linking operations (ex. symlinks)
 
-**`mount`, `T1078_Valid_Accounts`**
-- Changing moint settings
-- NFS mounts
-- SSSD (`T1078_Valid_Accounts`)
+**`sudo`**
+- Use of sudo and su
 
 **`stunnel`**
 - Using [stunnel](https://www.stunnel.org/)
 
-**`cron`**
-- Modifying crontabs (user or system)
-
-**`login`**
-- Editing login settings (login.defs, securetty, faillog, tallylog)
-
-**`network_modifications`**
-- Changing network settings
-
-**`init`, `systemd`, `systemd_generator`**
-- Changing scripts for startup
-
-**`session`**
-- Creating sessions (utmp, btmp, wtmp)
-
-**`shell_profiles`**
-- Modifying shell configurations (ex. bashrc)
-
-**`code_injection`, `data_injection`, `register_injection`, `tracing`**
-- Using injection via ptrace
-
-**`network_socket_created`**
-- Creation of ipv4 and ipv6 sockets
+**`bins`**
+- Using suspicious binaries (`ccdcadmin` user is exempt)
 
 ### Other events
 
-> ℹ️ These events may be false positives, use judgement to determine if they warrant investigation
+> ℹ️ Informational events that are low severity or can be used to correlate other activity 
 
-**`auditlog`**
+**`low`**
+- Low criticalifty events
+- Failed permissions access on common directories
+- Recon commands (ex. `id`)
+- PAM changes
+
+**`tamper`**
 - Attempts to change the auditd settings
 
-**`audittools`**
-- Attempts to read/access auditd logs/trails
+**`session`**
+- Logins and login attempts
 
-**`unauthedfileaccess`**
-- Permission denied on file access when using `open` command
-
-**`power_abuse`**
-- When admin user looks in another user's home dir 
-- False positive if user is `ccdcadmin`
-
-**`priv_esc`, `pkexec`**
-- Privilege escalation
-- Using sudo or su
-- Using [pkexec](https://linux.die.net/man/1/pkexec)
-
-**`perm_mod`**
+**`perms`**
 - Modifying file permissions
 - Modifying file attributes
 
-**`software_mgmt`**
+**`systemd`, `modules`**
+- Modifying systemd stuff
+- Loading modules
+
+**`docker`**
+- Docker changes
+
+**`kubelet`**
+- Changes to the kubelet file
+
+**`software_mgmt`, `third_party_sfotware_mgmt`**
 - Using package managers (ex. apt, dnf, yum)
-
-**`string_search`**
-- Using grep and similar programs
-
-**`Data_Compressed`**
-- Using compression programs (ex. zip, tar)
-
