@@ -28,6 +28,11 @@ net session
 #Enumerate Services (PowerShell)
 Get-Service | Where-Object {$_.Status -eq "Running"} | Select-Object Name, DisplayName
 
+#Enumerate Services and save it to CSV file. 
+Get-Service | Where-Object {$_.Status -eq "Running"} | 
+Select-Object Name, DisplayName, StartType |
+Export-Csv -Path "C:\RunningServices.csv" -NoTypeInformation
+
 # To get Service Status
 Get-Service -Name <nameofservice>
 
