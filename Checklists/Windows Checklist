@@ -1,0 +1,45 @@
+#System Name
+systeminfo
+
+#Windows Version
+winver
+
+#Display Local Admins
+net localgroup "Administrators"
+
+#Display Local Admins
+net localgroup "Administrators" /domain
+
+#Display Local Users
+net user
+
+#Display Local Users - Domain Controller
+net user /domain
+
+#Display drives
+dsutil fsinfo drives
+
+#Display Shares
+net share
+
+#Display Local Session
+net session
+
+#Enumerate Services (PowerShell)
+Get-Service | Where-Object {$_.Status -eq "Running"} | Select-Object Name, DisplayName
+
+# To get Service Status
+Get-Service -Name <nameofservice>
+
+#Stop Service
+Stop-Service -Name <nameofservice>
+
+#Start Service
+Start-Service -name <nameofservice>
+Get-Service | Out-File “C:\logs\All_Services.txt”
+
+#Look For Open Ports
+Get-NetTCPConnection | Where-Object {$_.State -eq "Listen"} | Select-Object LocalAddress, LocalPort, OwningProcess
+
+#Firewall Show Rules
+C:\ netsh advfirewall firewall show rule name=all
