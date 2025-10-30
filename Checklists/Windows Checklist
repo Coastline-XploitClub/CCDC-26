@@ -46,7 +46,10 @@ Get-Service | Out-File “C:\logs\All_Services.txt”
 #Look For Open Ports
 Get-NetTCPConnection | Where-Object {$_.State -eq "Listen"} | Select-Object LocalAddress, LocalPort, OwningProcess
 
-#Save the Open Ports output of your PowerShell command into a CSV file on C:\
+#List and Save the Open Ports into a CSV file on C:\
+Get-NetTCPConnection | Where-Object {$_.State -eq "Listen"} |
+    Select-Object LocalAddress, LocalPort, State, @{Name="ProcessName";Expression={ (Get-Process -Id $_.OwningProcess).ProcessName }}, InterfaceAlias, CreationTime |
+    Export-Csv -Path "C:\ListeningTCPConnections.csv" -NoTypeInformation
 
 #Firewall Show Rules
 C:\ netsh advfirewall firewall show rule name=all
