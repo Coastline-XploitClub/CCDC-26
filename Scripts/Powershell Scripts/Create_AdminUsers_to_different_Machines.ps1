@@ -69,10 +69,10 @@ $ScriptBlock = {
 }
 
 # Run the script on all remote machines
-# -ThrottleLimit controls how many parallel connections will run at once (adjust for your environment)
 Invoke-Command -ComputerName $RemoteComputers -Credential $Credential `
     -Authentication Negotiate `
     -ScriptBlock $ScriptBlock `
     -ArgumentList ($Names, $PlainUserPassword) `
     -ThrottleLimit 12 -ErrorAction Stop |
     ForEach-Object { Write-Host $_ }
+
