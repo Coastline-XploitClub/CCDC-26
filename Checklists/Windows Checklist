@@ -28,7 +28,7 @@ net session
 #Enumerate Services (PowerShell)
 Get-Service | Where-Object {$_.Status -eq "Running"} | Select-Object Name, DisplayName
 
-#Enumerate Services and save it to CSV file. 
+#Enumerate Services and save it into CSV file. 
 Get-Service | Where-Object {$_.Status -eq "Running"} | 
 Select-Object Name, DisplayName, StartType |
 Export-Csv -Path "C:\RunningServices.csv" -NoTypeInformation
@@ -45,6 +45,8 @@ Get-Service | Out-File “C:\logs\All_Services.txt”
 
 #Look For Open Ports
 Get-NetTCPConnection | Where-Object {$_.State -eq "Listen"} | Select-Object LocalAddress, LocalPort, OwningProcess
+
+#Save the Open Ports output of your PowerShell command into a CSV file on C:\
 
 #Firewall Show Rules
 C:\ netsh advfirewall firewall show rule name=all
