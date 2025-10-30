@@ -1,78 +1,115 @@
 # ---------------------------------------------
-# Remote user create / change password on multiple machines via WinRM
+# Secure multi-machine user creation / password update
 # ---------------------------------------------
 
-# Enter remote computers as comma-separated list, e.g. "192.168.220.111,192.168.220.112"
-$RemoteComputersInput = Read-Host "Enter remote computer(s) (comma-separated, no spaces required)"
-$RemoteComputers = $RemoteComputersInput -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+# Enter target computers (comma-separated)
+$RemoteComputers = (Read-Host "Enter remote computer(s) (comma-separated)") -split ',' |
+    ForEach-Object { $_.Trim() } | Where-Object { $_ }
 
 if (-not $RemoteComputers) {
-    Write-Error "No remote computers specified. Exiting."
+    Write-Error "No target hosts specified. Exiting."
     return
 }
 
-# Prompt for the Administrator password securely (used to connect to remote machines)
-$Password = Read-Host -AsSecureString "Enter the password for Administrator"
-$Credential = New-Object System.Management.Automation.PSCredential ("Administrator", $Password)
+# Connection credentials for remote WinRM session
+$ConnCred = Get-Credential -Message 'Credentials to connect to remote hosts (admin account)'
 
-# Define user accounts to create / change password for
-$Names = @('cesar_la', 'ruby_la', 'peter_la')   # adjust as needed
+# Define users to create or update
+$UserNames = @('cesar_la', 'ruby_la', 'peter_la')
 
-# Prompt for the new users' password securely
-$UserPasswordSecure = Read-Host -AsSecureString "Enter the password for the new users"
+# Prompt for password for the new users
+$UserPasswordSecure = Read-Host -AsSecureString "Enter password for the new users"
 
-# Convert SecureString to plain text (required for net user command)
-$Ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($UserPasswordSecure)
-$PlainUserPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($Ptr)
-[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($Ptr)  # clear memory securely
+# Throttle limit for parallel remoting
+$ThrottleLimit = 12
+$Jobs = @()
 
-# Script block to execute on each remote machine
-$ScriptBlock = {
-    param (
-        [string[]]$UserNames,
-        [string]$PasswordPlain
-    )
+foreach ($TargetComputer in $RemoteComputers) {
+    $Jobs += Start-Job -ScriptBlock {
+        param($Computer, $Cred, $UserPassSecure, $UserList)
 
-    foreach ($name in $UserNames) {
         try {
-            # Check if user exists (net user returns non-zero if not found)
-            cmd /c "net user `"$name`"" > $null 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                # User exists -> change password
-                cmd /c "net user `"$name`" `"$PasswordPlain`""
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Output "🔁 Password changed for existing user '$name'."
+            Invoke-Command -ComputerName $Computer -Credential $Cred -Authentication Negotiate -ScriptBlock {
+                param(
+                    [System.Security.SecureString]$RemoteUserPass,
+                    [string[]]$RemoteUserList
+                )
+
+                $Results = @()
+
+                # Convert SecureString to plaintext ON REMOTE HOST ONLY
+                $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($RemoteUserPass)
+                $PlainUserPass = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+
+                try {
+                    foreach ($name in $RemoteUserList) {
+                        # Check if user exists
+                        cmd /c "net user `"$name`"" > $null 2>&1
+                        if ($LASTEXITCODE -eq 0) {
+                            # user exists — update password
+                            cmd /c "net user `"$name`" `"$PlainUserPass`""
+                            if ($LASTEXITCODE -eq 0) {
+                                $Results += [PSCustomObject]@{
+                                    Computer = $env:COMPUTERNAME
+                                    User     = $name
+                                    Result   = "🔁 Password updated (user already existed)"
+                                }
+                            } else {
+                                $Results += [PSCustomObject]@{
+                                    Computer = $env:COMPUTERNAME
+                                    User     = $name
+                                    Result   = "❌ Failed to update password (exit code $LASTEXITCODE)"
+                                }
+                            }
+                        } else {
+                            # create new user
+                            cmd /c "net user `"$name`" `"$PlainUserPass`" /add"
+                            if ($LASTEXITCODE -eq 0) {
+                                cmd /c "net localgroup Administrators `"$name`" /add"
+                                cmd /c "net localgroup `"Remote Desktop Users`" `"$name`" /add"
+                                $Results += [PSCustomObject]@{
+                                    Computer = $env:COMPUTERNAME
+                                    User     = $name
+                                    Result   = "✅ Created and added to groups"
+                                }
+                            } else {
+                                $Results += [PSCustomObject]@{
+                                    Computer = $env:COMPUTERNAME
+                                    User     = $name
+                                    Result   = "❌ Failed to create user (exit code $LASTEXITCODE)"
+                                }
+                            }
+                        }
+                    }
                 }
-                else {
-                    Write-Error "❌ Failed to change password for '$name' (net user returned $LASTEXITCODE)."
-                }
-            }
-            else {
-                # User does not exist -> create and add to groups
-                cmd /c "net user `"$name`" `"$PasswordPlain`" /add"
-                if ($LASTEXITCODE -ne 0) {
-                    Write-Error "❌ Failed to create user '$name' (net user returned $LASTEXITCODE)."
-                    continue
+                finally {
+                    # Zero and clear password from memory
+                    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
                 }
 
-                # Add to Administrators and Remote Desktop Users
-                cmd /c "net localgroup Administrators `"$name`" /add" > $null 2>&1
-                cmd /c "net localgroup `"Remote Desktop Users`" `"$name`" /add" > $null 2>&1
+                return $Results
 
-                Write-Output "✅ User '$name' created and added to groups."
+            } -ArgumentList $UserPassSecure, $UserList -ErrorAction Stop
+
+        } catch {
+            [PSCustomObject]@{
+                Computer = $Computer
+                User     = "N/A"
+                Result   = "❌ Connection or script failed: $($_.Exception.Message)"
             }
         }
-        catch {
-            Write-Error "❌ Exception for user '$name': $($_.Exception.Message)"
-        }
+
+    } -ArgumentList $TargetComputer, $ConnCred, $UserPasswordSecure, $UserNames
+
+    while (($Jobs | Where-Object { $_.State -eq 'Running' }).Count -ge $ThrottleLimit) {
+        Start-Sleep -Seconds 1
     }
 }
 
-# Run the script on all remote machines
-Invoke-Command -ComputerName $RemoteComputers -Credential $Credential `
-    -Authentication Negotiate `
-    -ScriptBlock $ScriptBlock `
-    -ArgumentList ($Names, $PlainUserPassword) `
-    -ThrottleLimit 12 -ErrorAction Stop |
-    ForEach-Object { Write-Host $_ }
+# Wait for all jobs and collect output
+Wait-Job -Job $Jobs
+$AllResults = Receive-Job -Job $Jobs
+Remove-Job -Job $Jobs
 
+# Display formatted output
+$AllResults | Sort-Object Computer, User | Format-Table Computer, User, Result -AutoSize
