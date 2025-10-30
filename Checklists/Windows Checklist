@@ -17,7 +17,7 @@ net user
 net user /domain
 
 #Display drives
-dsutil fsinfo drives
+fsutil fsinfo drives
 
 #Display Shares
 net share
