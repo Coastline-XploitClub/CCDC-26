@@ -13,7 +13,11 @@
 
 [vanilla_linux] # Unconfigured boxes that will run full baseline config
 # toonami     ansible_host=192.168.220.101
-
+balrog ansible_host=192.168.220.2
+brassknuckles ansible_host=192.168.220.231
+donut ansible_host=192.168.220.234
+#nix ansible_host=192.168.220.44
+#pandemonium ansible_host=192.168.220.42
 
 [linux] # Configured boxes (for key-based auth)
 # eddieneddy ansible_host=192.168.220.13
@@ -25,7 +29,7 @@
 
 [vanilla_linux:vars]
 ansible_user=root
-ansible_password=GibM3Money123!
+ansible_password=LowCostLunar1@
 
 [linux:vars]
 ansible_user=ccdcadmin
