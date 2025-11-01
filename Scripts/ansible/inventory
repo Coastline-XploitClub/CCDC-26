@@ -9,16 +9,17 @@
 
 [vanilla_linux_ssh] # Unconfigured boxes that have ssh as a scored service
 # toonami   ansible_host=192.168.220.101
-badlands    ansible_host=192.168.220.104
-hatchery    ansible_host=192.168.220.76
-tarpit      ansible_host=192.168.220.170
+#badlands    ansible_host=192.168.220.104
+#hatchery    ansible_host=192.168.220.76
+#tarpit      ansible_host=192.168.220.170
 
 [vanilla_linux] # Unconfigured boxes that will run full baseline config
 # toonami     ansible_host=192.168.220.101
-laboratory  ansible_host=192.168.220.70
-hellcreek   ansible_host=192.168.220.103
-pangea      ansible_host=192.168.220.2
-
+#laboratory  ansible_host=192.168.220.70
+#hellcreek   ansible_host=192.168.220.103
+#pangea      ansible_host=192.168.220.2
+balrog     ansible_host=192.168.220.2
+brassknuckles ansible_host=192.168.220.231
 
 [linux] # Configured boxes ()
 # eddieneddy ansible_host=192.168.220.13
@@ -29,7 +30,7 @@ pangea      ansible_host=192.168.220.2
 
 [vanilla_linux:vars]
 ansible_user=root
-ansible_password=
+ansible_password=LowCostLunar1@
 
 [linux:vars]
 ansible_user=ccdcadmin

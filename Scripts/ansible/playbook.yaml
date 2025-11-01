@@ -15,4 +15,4 @@
     ansible_host_key_checking: false
     disable_password: false
   roles:
-    - baseline-security
+    - baseline-role

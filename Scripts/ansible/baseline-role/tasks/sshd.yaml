@@ -9,7 +9,7 @@
   with_items:
     - regexp: "^PermitRootLogin"
       line: "PermitRootLogin no"
-  notify: Restart ssh   # This handler runs only if change made
+  notify: Restart ssh  # This handler runs only if change made
   when: disable_root == true
 
 - name: Disable password authentication
@@ -22,5 +22,5 @@
   with_items:
     - regexp: "^PasswordAuthentication"
       line: "PasswordAuthentication no"
-  notify: Restart ssh   # This handler runs only if change made
+  notify: Restart ssh  # This handler runs only if change made
   when: disable_password == true

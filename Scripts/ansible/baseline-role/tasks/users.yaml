@@ -5,6 +5,7 @@
     name: "{{ admin_user }}"
     state: present
     create_home: yes
+    password: $6$pVfcNyAjtytjGRXA$gKN8WRgMH14ELcFof8eVWCsPUZikj7vlBQcYHqqkY5GW5cF7wCBhoUih8h6l/UkQ9RFPfB985uf3k1DW1BL37/  # Required for SSH key auth on Alpine
 
 - name: Add admin to sudoers
   ansible.builtin.lineinfile:
@@ -18,6 +19,9 @@
   ansible.builtin.file:
     path: "/home/{{ admin_user }}/.ssh"
     state: directory
+    mode: '0700'
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
 
 - name: Add SSH key for admin user
   ansible.builtin.copy:

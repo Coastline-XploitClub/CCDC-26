@@ -4,7 +4,23 @@
 - name: Copy enumerator script
   ansible.builtin.copy:
     src: enumerator.sh
-    dest: "/home/{{ admin_user }}/enumerator.sh"
+    dest: "/home/{{ admin_user }}/general_enumerator.sh"
+    owner: "{{ admin_user }}" 
+    group: "{{ admin_user }}"
+    mode: '0700'
+
+- name: Copy firewall enumerator script
+  ansible.builtin.copy:
+    src: linux_firewall_rules.sh
+    dest: "/home/{{ admin_user }}/firewall_enumerator.sh"
+    owner: "{{ admin_user }}" 
+    group: "{{ admin_user }}"
+    mode: '0700'
+
+- name: Copy tasks enumerator script
+  ansible.builtin.copy:
+    src: linux_list_tasks.sh
+    dest: "/home/{{ admin_user }}/tasks_enumerator.sh"
     owner: "{{ admin_user }}" 
     group: "{{ admin_user }}"
     mode: '0700'
