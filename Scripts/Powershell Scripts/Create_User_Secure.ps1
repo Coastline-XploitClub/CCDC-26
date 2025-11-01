@@ -1,5 +1,5 @@
 # ---------------------------------------------
-# Secure multi-machine user creation / password update
+# Secure multi-machine user creation
 # ---------------------------------------------
 
 # Enter target computers (comma-separated)
@@ -12,7 +12,8 @@ if (-not $RemoteComputers) {
 }
 
 # Connection credentials for remote WinRM session
-$ConnCred = Get-Credential -Message 'Credentials to connect to remote hosts (admin account)'
+
+$ConnCred = Get-Credential -Message 'Credentials to connect to remote hosts (use .\Administrator)'
 
 # Define users to create or update
 $UserNames = @('cesar_la', 'ruby_la', 'peter_la')
@@ -66,7 +67,7 @@ foreach ($TargetComputer in $RemoteComputers) {
                             cmd /c "net user `"$name`" `"$PlainUserPass`" /add"
                             if ($LASTEXITCODE -eq 0) {
                                 cmd /c "net localgroup Administrators `"$name`" /add"
-                                cmd /c "net localgroup `"Remote Desktop Users`" `"$name`" /add"
+                                
                                 $Results += [PSCustomObject]@{
                                     Computer = $env:COMPUTERNAME
                                     User     = $name
@@ -113,3 +114,5 @@ Remove-Job -Job $Jobs
 
 # Display formatted output
 $AllResults | Sort-Object Computer, User | Format-Table Computer, User, Result -AutoSize
+
+
