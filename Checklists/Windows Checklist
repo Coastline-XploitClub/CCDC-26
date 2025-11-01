@@ -1,0 +1,118 @@
+#System Name
+systeminfo
+
+#Windows Version
+winver
+
+#Display Local Admins
+net localgroup "Administrators"
+
+#Display Local Admins
+net localgroup "Administrators" /domain
+
+#Display Local Users
+net user
+
+#Display Local Users - Domain Controller
+net user /domain
+
+#Display drives
+fsutil fsinfo drives
+
+#Display Shares
+net share
+
+#Display Local Session
+net session
+
+#Check All Logged-In Users
+query user
+or 
+quser
+    #Option 2 — WMI / CIM (for scripting or remote checks)
+    Get-CimInstance -ClassName Win32_LoggedOnUser |
+    ForEach-Object {
+        $user = ($_.Antecedent -split '"')[1]
+        $session = ($_.Dependent -split '"')[1]
+        [PSCustomObject]@{
+            User     = $user
+            Session  = $session
+        }
+    } | Sort-Object User -Unique
+
+    #Option 3 — Modern PowerShell one-liner for quick view
+    Get-CimInstance Win32_ComputerSystem | Select-Object -ExpandProperty UserName
+
+    #Option 4 — List RDP and console sessions separately
+    Get-NetTCPConnection -State Established -LocalPort 3389 | Select-Object LocalAddress, RemoteAddress, State
+
+#Full Script: Detailed Current Logon Sessions
+# Function to parse "query user" output into objects
+function Get-UserSessions {
+    $sessions = query user 2>$null
+    if (-not $sessions) {
+        Write-Host "No session information available or access denied." -ForegroundColor Yellow
+        return
+    }
+
+    $results = @()
+    foreach ($line in $sessions[1..($sessions.Count - 1)]) {
+        $parsed = $line -replace '\s{2,}', ',' | ConvertFrom-Csv -Header 'UserName','SessionName','ID','State','IdleTime','LogonTime'
+        $results += $parsed
+    }
+    return $results
+}
+
+# Function to get extra info from WMI
+function Get-LoggedOnUsers {
+    Get-CimInstance -ClassName Win32_LoggedOnUser | ForEach-Object {
+        $user = ($_.Antecedent -split '"')[1]
+        $session = ($_.Dependent -split '"')[1]
+        [PSCustomObject]@{
+            User     = $user
+            Session  = $session
+        }
+    } | Sort-Object User -Unique
+}
+
+# Combine both sources
+$sessionInfo = Get-UserSessions
+$userInfo = Get-LoggedOnUsers
+
+# Join and display info
+Write-Host "`n=== CURRENTLY LOGGED-ON USERS ===`n" -ForegroundColor Cyan
+$sessionInfo | Format-Table UserName, SessionName, ID, State, IdleTime, LogonTime -AutoSize
+
+Write-Host "`n=== ADDITIONAL LOGON CONTEXT (Win32_LoggedOnUser) ===`n" -ForegroundColor Cyan
+$userInfo | Format-Table User, Session -AutoSize
+
+
+
+#Enumerate Services (PowerShell)
+Get-Service | Where-Object {$_.Status -eq "Running"} | Select-Object Name, DisplayName
+
+#Enumerate Services and save it into CSV file. 
+Get-Service | Where-Object {$_.Status -eq "Running"} | 
+Select-Object Name, DisplayName, StartType |
+Export-Csv -Path "C:\RunningServices.csv" -NoTypeInformation
+
+# To get Service Status
+Get-Service -Name <nameofservice>
+
+#Stop Service
+Stop-Service -Name <nameofservice>
+
+#Start Service
+Start-Service -name <nameofservice>
+Get-Service | Out-File “C:\logs\All_Services.txt”
+
+#Look For Open Ports
+Get-NetTCPConnection | Where-Object {$_.State -eq "Listen"} | Select-Object LocalAddress, LocalPort, OwningProcess
+
+#List and Save the Open Ports into a CSV file on C:\
+Get-NetTCPConnection | Where-Object {$_.State -eq "Listen"} |
+    Select-Object LocalAddress, LocalPort, State, @{Name="ProcessName";Expression={ (Get-Process -Id $_.OwningProcess).ProcessName }}, InterfaceAlias, CreationTime |
+    Export-Csv -Path "C:\ListeningTCPConnections.csv" -NoTypeInformation
+
+#Firewall Show Rules
+C:\ netsh advfirewall firewall show rule name=all
