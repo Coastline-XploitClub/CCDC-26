@@ -34,3 +34,6 @@
   import_tasks: sshd.yaml
   when: rotate_pubkey == false
 
+- name: Import scripts task
+  import_tasks: scripts.yaml
+  when: rotate_pubkey == false
