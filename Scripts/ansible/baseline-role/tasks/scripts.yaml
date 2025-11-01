@@ -1,0 +1,10 @@
+---
+# Copies scripts to be used
+
+- name: Copy enumerator script
+  ansible.builtin.copy:
+    src: enumerator.sh
+    dest: "/home/{{ admin_user }}/enumerator.sh"
+    owner: "{{ admin_user }}" 
+    group: "{{ admin_user }}"
+    mode: '0700'
