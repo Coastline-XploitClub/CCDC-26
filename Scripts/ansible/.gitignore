@@ -1,1 +1,3 @@
 .venv
+id_rsa
+ssh_pubkey.pub
