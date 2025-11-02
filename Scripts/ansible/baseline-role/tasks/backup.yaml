@@ -4,7 +4,7 @@
     path:
       - /root
       - /etc
-      - /var
+      - /var/log
       - /opt
       - /home
     dest: "/home/{{ admin_user }}/master_backup.tar"
@@ -31,7 +31,7 @@
   ansible.builtin.shell: |
     set -o pipefail
     # Get bind mounts using docker inspect
-    docker inspect --format='{{range .Mounts}}{{if eq .Type "bind"}}{{.Source}}{{"\n"}}{{end}}{{end}}' $(docker ps -aq) 2>/dev/null | sort -u
+    docker inspect --format='{{ "{{range .Mounts}}{{if eq .Type \"bind\"}}{{.Source}}{{\"\\n\"}}{{end}}{{end}}" }}' $(docker ps -aq) 2>/dev/null | sort -u
     # Find docker-compose and Dockerfile parent directories
     find /opt /srv /root -maxdepth 3 \( -name "docker-compose.yml" -o -name "docker-compose.yaml" -o -name "Dockerfile" \) 2>/dev/null | xargs -r dirname | sort -u
   args:
