@@ -1,0 +1,75 @@
+---
+- name: Create master backup archive
+  ansible.builtin.archive:
+    path:
+      - /root
+      - /etc
+      - /var
+      - /opt
+      - /home
+    dest: "/home/{{ admin_user }}/master_backup.tar"
+    format: tar
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0700"
+
+# Docker-aware backup tasks
+- name: Check if docker command exists
+  ansible.builtin.command: which docker
+  register: docker_exists
+  failed_when: false
+  changed_when: false
+
+- name: Check if Docker daemon is running
+  ansible.builtin.command: docker ps
+  register: docker_running
+  failed_when: false
+  changed_when: false
+  when: docker_exists.rc == 0
+
+- name: Get Docker bind mounts and find docker-compose directories (Docker running)
+  ansible.builtin.shell: |
+    set -o pipefail
+    # Get bind mounts using docker inspect
+    docker inspect --format='{{range .Mounts}}{{if eq .Type "bind"}}{{.Source}}{{"\n"}}{{end}}{{end}}' $(docker ps -aq) 2>/dev/null | sort -u
+    # Find docker-compose and Dockerfile parent directories
+    find /opt /srv /root -maxdepth 3 \( -name "docker-compose.yml" -o -name "docker-compose.yaml" -o -name "Dockerfile" \) 2>/dev/null | xargs -r dirname | sort -u
+  args:
+    executable: /bin/bash
+  register: docker_paths_running
+  changed_when: false
+  failed_when: false
+  when:
+    - docker_exists.rc == 0
+    - docker_running.rc == 0
+
+- name: Search filesystem for docker-compose and Dockerfiles (Docker not running)
+  ansible.builtin.shell: |
+    find /opt /srv /root -maxdepth 3 \( -name "docker-compose.yml" -o -name "docker-compose.yaml" -o -name "Dockerfile" \) 2>/dev/null | xargs -r dirname | sort -u
+  args:
+    executable: /bin/bash
+  register: docker_paths_search
+  changed_when: false
+  failed_when: false
+  when:
+    - docker_exists.rc == 0
+    - docker_running.rc != 0
+
+- name: Set docker backup paths
+  ansible.builtin.set_fact:
+    docker_backup_paths: "{{ (docker_paths_running.stdout_lines | default([]) + docker_paths_search.stdout_lines | default([])) | select | unique | list }}"
+  when: docker_exists.rc == 0
+
+- name: Create Docker backup archive
+  ansible.builtin.archive:
+    path: "{{ docker_backup_paths }}"
+    dest: "/home/{{ admin_user }}/docker_backup.tar"
+    format: tar
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0700"
+  failed_when: false
+  when:
+    - docker_exists.rc == 0
+    - docker_backup_paths is defined
+    - docker_backup_paths | length > 0
