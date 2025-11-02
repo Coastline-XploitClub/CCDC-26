@@ -110,7 +110,7 @@
 -w /etc/security/opasswd -k high
 
 ## Use of passwd command
--w /usr/bin/passwd -p x -k high
+-w /usr/bin/passwd -p x -F uid!={{ admin_user }} -k high
 
 ## Sudoers file changes
 -w /etc/sudoers -p wa -k high
@@ -126,15 +126,15 @@
 -w /usr/sbin/adduser -p x -k high
 
 ### Detect Remote Shell Use
--a always,exit -F arch=b64 -F exe=/bin/bash -F success=1 -S connect -k high
--a always,exit -F arch=b64 -F exe=/usr/bin/bash -F success=1 -S connect -k high
+-a always,exit -F arch=b64 -F exe=/bin/bash -F success=1 -S connect -F uid!={{ admin_user }} -k high
+-a always,exit -F arch=b64 -F exe=/usr/bin/bash -F success=1 -S connect -F uid!={{ admin_user }} -k high
 
 ### Changes to other files
--w /etc/hosts -p wa -k high
--w /etc/sysconfig/network -p wa -k high
--w /etc/sysconfig/network-scripts -p w -k high
--w /etc/network/ -p wa -k high
--a always,exit -F dir=/etc/NetworkManager/ -F perm=wa -k high
+-w /etc/hosts -p wa -k -F uid!={{ admin_user }} high
+-w /etc/sysconfig/network -p wa -F uid!={{ admin_user }} -k high
+-w /etc/sysconfig/network-scripts -p w -F uid!={{ admin_user }} -k high
+-w /etc/network/ -p wa -F uid!={{ admin_user }} -k high
+-a always,exit -F dir=/etc/NetworkManager/ -F perm=wa -F uid!={{ admin_user }} -k high
 
 ## System startup scripts
 -w /etc/inittab -p wa -k medium
@@ -156,7 +156,7 @@
 
 ## root/admin ssh key tampering
 -w /root/.ssh -p wa -k high
--w /home/{{ admin_user }}/.ssh -p wa -k high
+-w /home/{{ admin_user }}/.ssh -p wa -F uid!={{ admin_user }} -k high
 
 # Systemd
 -w /bin/systemctl -p x -k systemd

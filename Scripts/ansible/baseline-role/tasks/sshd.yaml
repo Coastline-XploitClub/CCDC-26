@@ -24,3 +24,15 @@
       line: "PasswordAuthentication no"
   notify: Restart ssh  # This handler runs only if change made
   when: disable_password == true
+
+- name: Enable pubkey authentication
+  ansible.builtin.lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+    validate: 'sshd -t -f %s'
+  with_items:
+    - regexp: "^PubkeyAuthentication"
+      line: "PubkeyAuthentication yes"
+  notify: Restart ssh  # This handler runs only if change made
