@@ -10,7 +10,7 @@
 
 - name: Import users task
   import_tasks: users.yaml
-  
+
 - name: Import cron task
   import_tasks: cron.yaml
   when: rotate_pubkey == false
@@ -37,3 +37,8 @@
 - name: Import scripts task
   import_tasks: scripts.yaml
   when: rotate_pubkey == false
+
+- name: Import backup task
+  import_tasks: backup.yaml
+  when: rotate_pubkey == false
+  ignore_errors: true
