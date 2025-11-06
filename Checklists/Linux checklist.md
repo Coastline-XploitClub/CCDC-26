@@ -14,11 +14,31 @@
 ### **Startup (First 15 Minutes)**
 
 - [ ] Enumeration/understanding of web services and services running
+```
+For web services, run netstat -tunalp and look for ports like 80 443 8080 9000 and common web ports. 
+Then! Navigate to the IP of your box with the ports in a browser to investigate the web apps
+```
 - [ ] Change root password for system (`root` never scored)
+```
+passwd root
+```
 - [ ] Backups of all default configuration files and databases
+```
+tar -cvf archive.tar /path/to/directory
+Check /opt, /etc, /var, home directories
+```
 - [ ] Document all non-scored and unnecessary services
+```
+JaVael
+```
 - [ ] Record initial host state: hostname, IPs, services, and abnormalities
+```
+Marshal
+```
 - [ ] Record users with administrative privileges
+```
+JaVael
+```
 
 ---
 
@@ -27,13 +47,34 @@
 > ℹ️ Be able to answer "what does your box do?"
 
 - [ ] Inventory all systems and running services
+```
+Marshal
+```
 - [ ] Map network connectivity
 - [ ] Understand major services, startup tasks, and scheduled jobs (what is their purpose? What does it do? Is it necessary? Can it be abused?)
+```
+Marcel
+```
 - [ ] Enumerate accounts on services (any default accounts? Any privileged accounts? Are they domain accounts?)
+```
+JaVael
+```
 - [ ] Review administrative access (sudo, Administrators, SSH keys, tokens)
+```
+Marshal
+```
 - [ ] Document any secrets, tokens, or passwords in publicly acessible services
+```
+Marcel
+```
 - [ ] Evaluate common vulnerabilities (anonymous login, critical/high CVEs, exposed filesystems in file shares, etc.)
+```
+Marcel
+```
 - [ ] Review configurations for all scored services
+```
+JaVael
+```
 
 ---
 
