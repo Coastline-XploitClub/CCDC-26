@@ -33,7 +33,9 @@ JaVael
 ```
 - [ ] Record initial host state: hostname, IPs, services, and abnormalities
 ```
-Marshal
+hostname; ip a; ss -tulnp; systemctl --type=service --state=running; ps aux --sort=-%cpu | head
+
+
 ```
 - [ ] Record users with administrative privileges
 ```
@@ -48,7 +50,8 @@ JaVael
 
 - [ ] Inventory all systems and running services
 ```
-Marshal
+hostname; ip a; ss -tulnp; systemctl --type=service --state=running; ps aux --sort=-%cpu | head
+
 ```
 - [ ] Map network connectivity
 - [ ] Understand major services, startup tasks, and scheduled jobs (what is their purpose? What does it do? Is it necessary? Can it be abused?)
@@ -61,7 +64,27 @@ JaVael
 ```
 - [ ] Review administrative access (sudo, Administrators, SSH keys, tokens)
 ```
-Marshal
+# sudoers and admin groups
+cat /etc/sudoers 2>/dev/null || true
+ls -la /etc/sudoers.d 2>/dev/null || true
+getent group sudo wheel adm 2>/dev/null || true
+awk -F: '$3==0{print $1}' /etc/passwd
+
+# SSH config & keys
+sshd -T 2>/dev/null | sed -n '1,200p'            # effective sshd config (if sshd binary present)
+grep -R --line-number "AuthorizedKeysFile\|PermitRootLogin\|PasswordAuthentication\|PermitEmptyPasswords" /etc/ssh/sshd_config /etc/ssh/* 2>/dev/null || true
+for u in $(cut -f1 -d: /etc/passwd); do
+  homedir=$(getent passwd "$u" | cut -d: -f6)
+  [ -f "$homedir/.ssh/authorized_keys" ] && echo "USER:$u keys:" && sed -n '1,200p' "$homedir/.ssh/authorized_keys"
+done
+
+# sudo usage and auth logs (recent)
+journalctl -u sudo -n 200 --no-pager 2>/dev/null || (grep -i sudo /var/log/auth.log 2>/dev/null | tail -n 200)
+
+# Common token/file locations
+ls -la /root/.aws /root/.config/gcloud ~/.aws ~/.aws/credentials ~/.docker/config.json 2>/dev/null || true
+grep -R --line-number -E "aws_access_key_id|aws_secret_access_key|gcp|google|AZURE_credential|client_secret|token" /home /root 2>/dev/null | head -n 200 || true
+
 ```
 - [ ] Document any secrets, tokens, or passwords in publicly acessible services
 ```
