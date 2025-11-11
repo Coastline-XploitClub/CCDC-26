@@ -52,6 +52,7 @@ Marcel
 ```
 - [ ] Find out if any other boxes rely upon a scored service
 ```
+Look in service's access logs (ex. web server logs), or run a tcpdump to listen on a port
 tcpdump -i <interface> tcp and src net 192.168.220.0/24 and port <PORT> 
 ```
 - [ ] List adminsitrative users
