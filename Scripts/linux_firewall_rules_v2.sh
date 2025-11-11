@@ -4,7 +4,7 @@
 # Script Name: list_firewall.sh (POSIX-Compliant)
 # Description: Enumerates firewall rules from UFW, firewalld, nftables,
 #              and iptables.
-# Author:      Gemini (modified for POSIX)
+# Author:      dsub
 # Note:        This script must be run as root.
 # ==============================================================================
 
@@ -26,7 +26,7 @@ fi
 
 # Use printf for all output
 printf "%s==================================================%s\n" "$GREEN" "$NC"
-printf "%s            Firewall Rule Enumeration             %s\n" "$GREEN" "$NC"
+printf "%s            Firewall Rules Enumeration             %s\n" "$GREEN" "$NC"
 printf "%s==================================================%s\n" "$GREEN" "$NC"
 printf "\n"
 
