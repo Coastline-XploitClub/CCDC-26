@@ -11,25 +11,12 @@
 
 ---
 
-### **Startup (First 15 Minutes)**
+### **1 Assessment**
+> ℹ️ Be able to answer "what does your box do?"
 
-- [ ] Enumeration/understanding of web services and services running
-```
-For web services, run netstat -tunalp and look for ports like 80 443 8080 9000 and common web ports. 
-Then! Navigate to the IP of your box with the ports in a browser to investigate the web apps
-```
 - [ ] Change root password for system (`root` never scored)
 ```
 passwd root
-```
-- [ ] Backups of all default configuration files and databases
-```
-tar -cvf archive.tar /path/to/directory
-Check /opt, /etc, /var, home directories
-```
-- [ ] Document all non-scored and unnecessary services
-```
-JaVael
 ```
 - [ ] Record initial host state: hostname, IPs, services, and abnormalities
 ```
@@ -38,56 +25,26 @@ ip a
 ss -tulnp or netstat -tunalp
 systemctl --type=service --state=running
 ```
-- [ ] Record users with administrative privileges
+- [ ] Enumeration/understanding of web services and services running (what is their purpose? What does it do? Is it necessary? Can it be abused?)
 ```
-JaVael
-```
+For web services, run netstat -tunalp and look for ports like 80 443 8080 9000 and common web ports. 
+Then! Navigate to the IP of your box with the ports in a browser to investigate the web apps
 
----
-
-### **1 Assessment**
-
-> ℹ️ Be able to answer "what does your box do?"
-
-- [ ] Inventory all systems and running services
+👁️‍🗨️ Document:
+  - Service name and port
+  - Administrative default creds
+✏️ Change:
+  - Adminsitrative default creds
+👁️‍🗨️ Document:
+  - Config location and/or data location to back up
+  - If sensitive data/PII stored and where
+  - If anonymous/no-password login
+  - Are there domain accounts?
 ```
-Marshal
+- [ ] Backups of all default configuration files and databases
 ```
-- [ ] Map network connectivity
-- [ ] Understand major services, startup tasks, and scheduled jobs (what is their purpose? What does it do? Is it necessary? Can it be abused?)
-```
-Marcel
-```
-- [ ] Enumerate accounts on services (any default accounts? Any privileged accounts? Are they domain accounts?)
-```
-JaVael
-```
-- [ ] Review administrative access (sudo, Administrators, SSH keys, tokens)
-```
-# sudoers and admin groups
-cat /etc/sudoers 2>/dev/null || true
-ls -la /etc/sudoers.d 2>/dev/null || true
-getent group sudo wheel adm 2>/dev/null || true
-awk -F: '$3==0{print $1}' /etc/passwd
-
-# SSH config & keys
-sshd -T 2>/dev/null | sed -n '1,200p'            # effective sshd config (if sshd binary present)
-grep -R --line-number "AuthorizedKeysFile\|PermitRootLogin\|PasswordAuthentication\|PermitEmptyPasswords" /etc/ssh/sshd_config /etc/ssh/* 2>/dev/null || true
-for u in $(cut -f1 -d: /etc/passwd); do
-  homedir=$(getent passwd "$u" | cut -d: -f6)
-  [ -f "$homedir/.ssh/authorized_keys" ] && echo "USER:$u keys:" && sed -n '1,200p' "$homedir/.ssh/authorized_keys"
-done
-
-# sudo usage and auth logs (recent)
-journalctl -u sudo -n 200 --no-pager 2>/dev/null || (grep -i sudo /var/log/auth.log 2>/dev/null | tail -n 200)
-
-# Common token/file locations
-grep -R --line-number -E "phrase" /home /root
-
-```
-- [ ] Document any secrets, tokens, or passwords in publicly acessible services
-```
-Marcel
+tar -cvf archive.tar /path/to/directory
+Check /opt, /etc, /var, home directories
 ```
 - [ ] Evaluate common vulnerabilities (anonymous login, critical/high CVEs, exposed filesystems in file shares, etc.)
 ```
@@ -96,6 +53,25 @@ Marcel
 - [ ] Review configurations for all scored services
 ```
 JaVael
+```
+- [ ] Record users with administrative privileges
+```
+JaVael
+```
+- [ ] Map network connectivity
+```
+tcpdump -i <interface> tcp and src net 192.168.220.0/24 and port <PORT> 
+```
+- [ ] Understand startup tasks and scheduled jobs
+```
+Marcel
+```
+- [ ] Review administrative access (sudo, Administrators, SSH keys, tokens)
+```
+Check /etc/sudoers and /etc/sudoers.d/*
+Check for keys stored under ~/.ssh for each user
+
+grep -R --line-number -E <phrase> <directories>
 ```
 
 ---
