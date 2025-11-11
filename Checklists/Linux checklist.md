@@ -19,9 +19,9 @@
 passwd root
 ```
 - [ ] Record initial host state: hostname, IPs, services, and abnormalities
+> 👉 can use `linux_enumerator.sh` for this!
 ```
-hostname
-ip a
+hostname, ip a
 ss -tulnp or netstat -tunalp
 systemctl --type=service --state=running
 ```
@@ -55,6 +55,7 @@ Marcel
 tcpdump -i <interface> tcp and src net 192.168.220.0/24 and port <PORT> 
 ```
 - [ ] List adminsitrative users
+> 👉 can use `linux_enumerator.sh` for this!
 ```
 Check /etc/sudoers and /etc/sudoers.d/*
 ```
