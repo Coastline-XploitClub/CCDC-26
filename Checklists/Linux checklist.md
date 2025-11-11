@@ -50,28 +50,13 @@ Check /opt, /etc, /var, home directories
 ```
 Marcel
 ```
-- [ ] Review configurations for all scored services
-```
-JaVael
-```
-- [ ] Record users with administrative privileges
-```
-JaVael
-```
-- [ ] Map network connectivity
+- [ ] Find out if any other boxes rely upon a scored service
 ```
 tcpdump -i <interface> tcp and src net 192.168.220.0/24 and port <PORT> 
 ```
-- [ ] Understand startup tasks and scheduled jobs
-```
-Marcel
-```
-- [ ] Review administrative access (sudo, Administrators, SSH keys, tokens)
+- [ ] List adminsitrative users
 ```
 Check /etc/sudoers and /etc/sudoers.d/*
-Check for keys stored under ~/.ssh for each user
-
-grep -R --line-number -E <phrase> <directories>
 ```
 
 ---
@@ -85,6 +70,11 @@ grep -R --line-number -E <phrase> <directories>
 - [ ] Treat unknown accounts as potentially scored; avoid deletions without validation
 - [ ] Apply strong password and lockout policies
 - [ ] Change passwords for other privileged user accounts, tokens, etc. (submit PCRs where necessary)
+- [ ] Review and remove sketchy access (sudo, Administrators)
+```
+Check for keys stored under ~/.ssh for each user
+grep -R --line-number -E <phrase> <directories>
+```
 
 ---
 
@@ -96,6 +86,10 @@ grep -R --line-number -E <phrase> <directories>
 - [ ] Locate and remove persistence mechanisms (cron, systemd, startup tasks)
 - [ ] Terminate suspicious or unnecessary sessions without impacting scoring
 - [ ] Rotate all application and database secrets (submit PCRs where necessary)
+- [ ] Understand startup tasks and scheduled jobs
+```
+Marcel
+```
 
 ---
 
