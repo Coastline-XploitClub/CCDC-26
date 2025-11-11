@@ -33,9 +33,10 @@ JaVael
 ```
 - [ ] Record initial host state: hostname, IPs, services, and abnormalities
 ```
-hostname; ip a; ss -tulnp; systemctl --type=service --state=running; ps aux --sort=-%cpu | head
-
-
+hostname
+ip a
+ss -tulnp or netstat -tunalp
+systemctl --type=service --state=running
 ```
 - [ ] Record users with administrative privileges
 ```
@@ -50,8 +51,7 @@ JaVael
 
 - [ ] Inventory all systems and running services
 ```
-hostname; ip a; ss -tulnp; systemctl --type=service --state=running; ps aux --sort=-%cpu | head
-
+Marshal
 ```
 - [ ] Map network connectivity
 - [ ] Understand major services, startup tasks, and scheduled jobs (what is their purpose? What does it do? Is it necessary? Can it be abused?)
@@ -82,8 +82,7 @@ done
 journalctl -u sudo -n 200 --no-pager 2>/dev/null || (grep -i sudo /var/log/auth.log 2>/dev/null | tail -n 200)
 
 # Common token/file locations
-ls -la /root/.aws /root/.config/gcloud ~/.aws ~/.aws/credentials ~/.docker/config.json 2>/dev/null || true
-grep -R --line-number -E "aws_access_key_id|aws_secret_access_key|gcp|google|AZURE_credential|client_secret|token" /home /root 2>/dev/null | head -n 200 || true
+grep -R --line-number -E "phrase" /home /root
 
 ```
 - [ ] Document any secrets, tokens, or passwords in publicly acessible services
