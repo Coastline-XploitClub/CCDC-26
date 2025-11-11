@@ -11,7 +11,7 @@
 
 ---
 
-### **1 Assessment**
+### **1 Assessment** (15 minutes MAX)
 > ℹ️ Be able to answer "what does your box do?"
 
 - [ ] Change root password for system (`root` never scored)
