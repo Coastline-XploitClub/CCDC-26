@@ -1,35 +1,57 @@
 #!/bin/sh
 
+# POSIX-compliant color setup
+# Check if stdout is a terminal (tty) before using color codes
+if [ -t 1 ]; then
+  # printf interprets the octal \033 for ESC
+  GREEN=$(printf '\033[0;32m')
+  YELLOW=$(printf '\033[1;33m')
+  RED=$(printf '\033[0;31m')
+  NC=$(printf '\033[0m') # No Color
+else
+  # Disable colors if not a tty (e.g., piping to a file)
+  GREEN=""
+  YELLOW=""
+  RED=""
+  NC=""
+fi
+
 # Function to show the menu with an ASCII banner
 show_menu() {
-    echo "========================================="
-    echo "    Coastline Xploit Club"
-    echo "    Advanced Shell Framework"
-    echo "========================================="
-    echo "Choose an option:"
-    echo "1) Display IPs of all interfaces, hostname, and OS version"
-    echo "2) List all user accounts, sudo users, and groups with elevated privileges"
-    echo "3) Show open ports and associated processes"
-    echo "4) Display crontabs"
-    echo "5) List firewall rules (iptables, ufw, or firewalld)"
-    echo "6) Change passwords for users in privileged groups and save them"
-    echo "7) List all installed software"
-    echo "8) Exit"
+    printf "%s" "$YELLOW"
+    printf "=========================================\n"
+    printf "    Coastline Xploit Club\n"
+    printf "    Advanced Shell Framework\n"
+    printf "=========================================\n"
+    printf "Choose an option:\n"
+    printf "1) Display IPs of all interfaces, hostname, and OS version\n"
+    printf "2) List all user accounts, sudo users, and groups with elevated privileges\n"
+    printf "3) Show open ports and associated processes\n"
+    printf "4) Display crontabs\n"
+    printf "5) List firewall rules (iptables, ufw, or firewalld)\n"
+    printf "6) Change passwords for users in privileged groups and save them (WARNING: DANGEROUS)\n"
+    printf "7) List all installed software\n"
+    printf "8) Exit\n"
+    printf "%s" "$NC"
 }
 
 # Function to execute the corresponding command based on the user's choice
 execute_option() {
+    # Establish sudo users and groups
+    sudo_users=$(grep -E '^\s*([a-zA-Z0-9_-]+)\s+ALL' /etc/sudoers | awk '{print $1}' | sort -u)
+    sudo_groups=$(grep -E '^\s*%([a-zA-Z0-9_-]+)\s+ALL' /etc/sudoers | awk '{print $1}' | sed 's/%//' | sort -u)
+
     case "$1" in
         1)
-            echo "IP Addresses of All Network Interfaces:"
+            printf "%sIP Addresses of All Network Interfaces:%s\n" "$GREEN" "$NC"
 
             # Display IPs for each network interface
             ip -o -f inet addr show | awk '{print $2, $4}'
 
-            echo "Hostname:"
+            printf "%sHostname:%s\n" "$GREEN" "$NC"
             hostname
 
-            echo "Operating System Version:"
+            printf "%sOperating System Version:%s\n" "$GREEN" "$NC"
             # Check if lsb_release is available
             if command -v lsb_release > /dev/null 2>&1; then
                 lsb_release -a
@@ -39,21 +61,18 @@ execute_option() {
             fi
             ;;
         2)
-            echo "Listing All User Accounts:"
+            printf "%sListing all user accounts:%s\n" "$GREEN" "$NC"
 
             # List all user accounts (using cat /etc/passwd if getent is not available)
             if command -v getent > /dev/null 2>&1; then
-                getent passwd | cut -d: -f1  # Get list of all usernames
+                getent passwd | grep -v /bin/false | grep -v /sbin/nologin | grep -v /sbin/shutdown | grep -v /bin/sync | grep -v /sbin/halt | cut -d: -f1  # Get list of all usernames
             else
-                cat /etc/passwd | cut -d: -f1  # Fallback to /etc/passwd if getent is not available
+                cat /etc/passwd | grep -v /bin/false | grep -v /sbin/nologin | grep -v /sbin/shutdown | grep -v /bin/sync | grep -v /sbin/halt | cut -d: -f1   # Fallback to /etc/passwd if getent is not available
             fi
             echo ""
 
             # Listing users and groups with sudo privileges
-            echo "Listing Users with Sudo Privileges:"
-
-            # Get users with sudo privileges from /etc/sudoers
-            sudo_users=$(grep -E '^\s*([a-zA-Z0-9_-]+)\s+ALL' /etc/sudoers | awk '{print $1}')
+            printf "%sListing users with sudo privileges:%s\n" "$GREEN" "$NC"
 
             if [ -n "$sudo_users" ]; then
                 # Only list users, excluding group names (exclude %)
@@ -70,10 +89,7 @@ execute_option() {
 
             echo ""
 
-            echo "Listing Groups with Sudo Privileges:"
-
-            # Get groups with sudo privileges from /etc/sudoers (groups prefixed with %)
-            sudo_groups=$(grep -E '^\s*%([a-zA-Z0-9_-]+)\s+ALL' /etc/sudoers | awk '{print $1}' | sed 's/%//')
+            printf "%sListing groups with sudo privileges:%s\n" "$GREEN" "$NC"
 
             if [ -n "$sudo_groups" ]; then
                 echo "Groups with sudo privileges:"
@@ -83,7 +99,7 @@ execute_option() {
             fi
             echo ""
 
-            echo "Listing All Users in Privileged Groups:"
+            printf "%sListing all users in privileged groups:%s\n" "$GREEN" "$NC"
 
             # For each group that has sudo privileges, list users in that group
             if [ -n "$sudo_groups" ]; then
@@ -100,21 +116,21 @@ execute_option() {
             fi
             ;;
         3)
-            echo "Open Ports and Associated Processes:"
+            printf "%sOpen ports and processes:%s\n" "$GREEN" "$NC"
 
             # Check if ss is installed
             if command -v ss > /dev/null 2>&1; then
                 # Using ss to show open ports with process name and PID
-                ss -tulnp | awk 'NR > 1 {print "Protocol: " $1 "\tLocal Address: " $4 "\tPID/Program: " $6}'
+                ss -tulnp | awk 'NR > 1 {print "Protocol: " $1 "\tLocal Address: " $5 "\tPID/Program: " $7}' | grep -v "127.0.0"
             elif command -v netstat > /dev/null 2>&1; then
                 # Fallback to netstat if ss is not installed
-                netstat -tulnp | awk 'NR > 2 {print "Protocol: " $1 "\tLocal Address: " $4 "\tPID/Program: " $7}'
+                netstat -tulnp | awk 'NR > 2 {print "Protocol: " $1 "\tLocal Address: " $4 "\tPID/Program: " $7}' | grep -v "127.0.0"
             else
                 echo "Neither 'ss' nor 'netstat' is installed. Cannot display open ports."
             fi
             ;;
         4)
-            echo "Listing All Crontabs:"
+            printf "%sListing all crontabs:%s\n" "$GREEN" "$NC"
 
             # List all cron jobs from various locations with full paths
 
@@ -150,7 +166,7 @@ execute_option() {
             fi
             ;;
         5)
-            echo "Listing Firewall Rules:"
+            printf "%sListing all firewall rules:%s\n" "$GREEN" "$NC"
 
             # Check for iptables
             if command -v iptables > /dev/null 2>&1; then
@@ -191,6 +207,8 @@ execute_option() {
                 for group in $sudo_groups; do
                     users_in_group=$(getent group "$group" | cut -d: -f4)
                     if [ -n "$users_in_group" ]; then
+                        old_IFS=$IFS
+                        IFS=,
                         for user in $users_in_group; do
                             # Generate a random 16-character alphanumeric password
                             password=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)
@@ -201,6 +219,7 @@ execute_option() {
                             # Save the username and password to the output file
                             echo "$user,$password" >> "$output_file"
                         done
+                        IFS=$old_IFS
                     fi
                 done
                 echo "Passwords changed and saved to $output_file"
@@ -209,7 +228,7 @@ execute_option() {
             fi
             ;;
         7)
-            echo "Listing All Installed Software:"
+            printf "%sListing all installed software:%s\n" "$GREEN" "$NC"
 
             # List installed software from different package managers
 
@@ -258,10 +277,35 @@ execute_option() {
     esac
 }
 
+# Function to run all non-destructive options (1–5 and 7)
+run_all_safe_options() {
+    # Options to iterate over (excluding option 6)
+    for opt in 1 2 3 4 5 7; do
+        printf '\n=========================================\n'
+        printf 'Executing option %s\n' "$opt"
+        printf '=========================================\n\n'
+        execute_option "$opt"
+    done
+}
+
 # Main loop to show the menu and prompt for user input
+# Check if -a flag is present in the script arguments
+a_flag_found=0
+for arg in "$@"; do
+  if [ "$arg" = "-a" ]; then
+    a_flag_found=1
+    break
+  fi
+done
+
+if [ "$a_flag_found" -eq 1 ]; then
+  run_all_safe_options
+  exit 0
+fi
+
 while true; do
     show_menu
-    echo "Please choose an option (1-8): "
+    printf "%sPlease choose an option (1-8): %s\n" "$RED" "$NC"
     read option
     execute_option "$option"
     echo ""
