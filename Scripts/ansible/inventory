@@ -9,30 +9,33 @@
 
 [vanilla_linux_ssh] # Unconfigured boxes that have ssh as a scored service
 # toonami   ansible_host=192.168.220.101
-#badlands    ansible_host=192.168.220.104
-#hatchery    ansible_host=192.168.220.76
-#tarpit      ansible_host=192.168.220.170
 
 [vanilla_linux] # Unconfigured boxes that will run full baseline config
 # toonami     ansible_host=192.168.220.101
-#laboratory  ansible_host=192.168.220.70
-#hellcreek   ansible_host=192.168.220.103
-#pangea      ansible_host=192.168.220.2
-balrog     ansible_host=192.168.220.2
-brassknuckles ansible_host=192.168.220.231
+laboratory  ansible_host=192.168.220.70
+hellcreek   ansible_host=192.168.220.103
 
-[linux] # Configured boxes ()
+[linux] # Configured boxes
 # eddieneddy ansible_host=192.168.220.13
+pangea      ansible_host=192.168.220.2
+badlands    ansible_host=192.168.220.104
+hatchery    ansible_host=192.168.220.76
+tarpit      ansible_host=192.168.220.170
+
 
 ###############
 ## VARIABLES ##
 ###############
 
+[vanilla_linux_ssh:vars]
+ansible_user=root
+ansible_password=OMGaTREX1?
+
 [vanilla_linux:vars]
 ansible_user=root
-ansible_password=LowCostLunar1@
+ansible_password=OMGaTREX1?
 
 [linux:vars]
 ansible_user=ccdcadmin
-ansible_ssh_private_key_file=/Users/marcel/CCDC-26/Scripts/ansible/baseline-role/files/id_rsa
+ansible_ssh_private_key_file=/Users/marcel/.ssh/ccdc_key
 ansible_group_priority=100  # These vars take precedence over same-named vars when host is in multiple groups

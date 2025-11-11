@@ -38,7 +38,7 @@
   import_tasks: scripts.yaml
   when: rotate_pubkey == false
 
-- name: Import backup task
-  import_tasks: backup.yaml
-  when: rotate_pubkey == false
-  ignore_errors: true
+#- name: Import backup task
+#  import_tasks: backup.yaml
+#  when: rotate_pubkey == false
+#  ignore_errors: true
