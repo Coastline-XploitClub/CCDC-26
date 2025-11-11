@@ -4,7 +4,7 @@
 # Script Name: list_tasks.sh (POSIX-Compliant)
 # Description: Enumerates scheduled tasks on a Linux system, including
 #              cron jobs and systemd timers.
-# Author:      Gemini (modified for POSIX)
+# Author:      dsub
 # Note:        This script should be run as root for complete visibility.
 # ==============================================================================
 
@@ -26,7 +26,7 @@ fi
 
 # Use printf for all output, as 'echo -e' is not POSIX
 printf "%s==================================================%s\n" "$GREEN" "$NC"
-printf "%s      Scheduled Task & Cron Job Enumeration       %s\n" "$GREEN" "$NC"
+printf "%s      Scheduled Tasks & Cron Jobs Enumeration       %s\n" "$GREEN" "$NC"
 printf "%s==================================================%s\n" "$GREEN" "$NC"
 printf "\n"
 
