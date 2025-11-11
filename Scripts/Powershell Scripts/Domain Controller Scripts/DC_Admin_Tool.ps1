@@ -152,7 +152,7 @@ $txtOutput.BackColor = [System.Drawing.Color]::WhiteSmoke
 $tabConn = New-Object System.Windows.Forms.TabPage
 $tabConn.Text = "Connection"
 
-# Label & text alignment fix — slightly more vertical space and AutoSize
+# Label & text alignment — slightly more vertical space and AutoSize
 $lblDC = New-Object System.Windows.Forms.Label
 $lblDC.Text = "Domain Controller IP:"
 $lblDC.Location = New-Object System.Drawing.Point(20, 25)
@@ -190,7 +190,7 @@ $txtPw.Location = New-Object System.Drawing.Point(200, 157)
 $txtPw.Size = New-Object System.Drawing.Size(220, 22)
 $txtPw.UseSystemPasswordChar = $true
 
-# Buttons (kept identical logic)
+# Buttons 
 $btnSaveConn = New-Object System.Windows.Forms.Button
 $btnSaveConn.Text = "Save Connection"
 $btnSaveConn.Location = New-Object System.Drawing.Point(20, 200)
@@ -1813,3 +1813,4 @@ $form.Controls.AddRange(@($tabs, $txtOutput))
 $form.Show()
 [System.Windows.Forms.Application]::DoEvents()
 [System.Windows.Forms.Application]::Run($form)
+

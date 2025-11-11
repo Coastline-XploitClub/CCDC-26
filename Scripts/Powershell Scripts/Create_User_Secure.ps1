@@ -1,5 +1,6 @@
 # ---------------------------------------------
 # Secure multi-machine user creation
+# Author: Cesar
 # ---------------------------------------------
 
 # Enter target computers (comma-separated)
@@ -114,5 +115,6 @@ Remove-Job -Job $Jobs
 
 # Display formatted output
 $AllResults | Sort-Object Computer, User | Format-Table Computer, User, Result -AutoSize
+
 
 
