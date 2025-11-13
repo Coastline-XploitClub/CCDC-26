@@ -207,7 +207,6 @@ else {
     Compress-Archive -Path "$FullBackup\*" -DestinationPath $ZipPath -Force
     Write-Host "✓ Backup archive created: $ZipPath" -ForegroundColor Green
 
-
 }  
 
 catch {
@@ -667,7 +666,6 @@ catch {
     Add-Result "NULL Session Enumeration" "Warning" "Cannot verify"
 }
 
-
 #===========================================================================
 #============ Firewall Rules ===============================================
 <#
@@ -867,6 +865,32 @@ Get-NetFirewallProfile |
 
 Write-Host "`n[+] Netsh Authoritative Output:" -ForegroundColor Cyan
 netsh advfirewall show allprofiles
+
+# ---------------------------------------------------------------------------
+# Additional BlueShield Verification (Inbound Policy Check)
+# ---------------------------------------------------------------------------
+
+$fw = Get-NetFirewallProfile -Profile Domain
+if ($fw.DefaultInboundAction -eq "Block") {
+    Write-Ok "Domain Inbound Policy: Block (secure configuration active)"
+} else {
+    Write-Warn "Domain Inbound Policy: NOT set to Block (weaker posture detected)"
+}
+
+if ($fw.DefaultOutboundAction -eq "Allow") {
+    Write-Ok "Domain Outbound Policy: Allow (standard configuration active)"
+} else {
+    Write-Warn "Domain Outbound Policy: NOT set to Allow (restricted mode)"
+}
+
+# Optional: confirm logging
+if ($fw.LogAllowed -and $fw.LogBlocked) {
+    Write-Ok "Firewall logging (Allowed & Blocked) is enabled."
+} else {
+    Write-Warn "Firewall logging is NOT fully enabled."
+}
+
+# ---------------------------------------------------------------------------
 
 Write-Ok "BlueShield Domain-Only Firewall configuration completed successfully."
 
@@ -1210,6 +1234,4 @@ Write-Host ("-------------------------------------------") -ForegroundColor Cyan
 Write-Host ("Total Checks: {0}" -f $Results.Count) -ForegroundColor White
 Write-Host ("Report saved to {0}" -f $summaryPath) -ForegroundColor Cyan
 Write-Host "===========================================" -ForegroundColor Cyan
-
-
 
