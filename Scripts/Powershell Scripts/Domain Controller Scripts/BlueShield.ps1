@@ -207,15 +207,6 @@ else {
     Compress-Archive -Path "$FullBackup\*" -DestinationPath $ZipPath -Force
     Write-Host "✓ Backup archive created: $ZipPath" -ForegroundColor Green
 
-    # --- OFFSITE COPY (OPTIONAL) ---
-    $RemotePath = "\\tsclient\H\Xsploit Club"
-    if (Test-Path $RemotePath) {
-        Copy-Item -Path $ZipPath -Destination $RemotePath -Force
-        Write-Host "✓ Offsite copy stored to $RemotePath" -ForegroundColor Green
-    }
-    else {
-        Write-Host "[WARN] Offsite path not reachable: $RemotePath" -ForegroundColor Yellow
-    }
 
 }  
 
@@ -1219,5 +1210,6 @@ Write-Host ("-------------------------------------------") -ForegroundColor Cyan
 Write-Host ("Total Checks: {0}" -f $Results.Count) -ForegroundColor White
 Write-Host ("Report saved to {0}" -f $summaryPath) -ForegroundColor Cyan
 Write-Host "===========================================" -ForegroundColor Cyan
+
 
 
