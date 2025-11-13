@@ -48,7 +48,8 @@ Check /opt, /etc, /var, home directories
 ```
 - [ ] Evaluate common vulnerabilities (anonymous login, critical/high CVEs, exposed filesystems in file shares, etc.)
 ```
-Marcel
+Check version of service running, and cross-check with release notes (look for security patches in later updates), or search for CVEs for service.
+Take a note if you have to update the service to patch, or if there are any mitigations available that don't require updating.
 ```
 - [ ] Find out if any other boxes rely upon a scored service
 ```
