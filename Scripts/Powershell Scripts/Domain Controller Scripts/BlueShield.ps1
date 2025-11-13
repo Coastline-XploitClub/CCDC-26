@@ -121,13 +121,27 @@ try {
     Write-Host "✓ Registry hives exported." -ForegroundColor Green
 
     # --- ADCS (CERTIFICATE AUTHORITY) BACKUP ---
-    Write-Host "[>] Backing up ADCS (Certificate Services)..." -ForegroundColor Cyan
-    $CAPath = Join-Path $FullBackup "ADCS"
-    New-Item -ItemType Directory -Path $CAPath -Force | Out-Null
-    certutil -backupDB (Join-Path $CAPath "DB") | Out-Null
-    certutil -backupKey (Join-Path $CAPath "Keys") | Out-Null
-    reg export HKLM\SYSTEM\CurrentControlSet\Services\CertSvc (Join-Path $CAPath "CertSvc.reg") /y
-    Write-Host "✓ ADCS backup completed." -ForegroundColor Green
+Write-Host "[>] Backing up ADCS (Certificate Services)..." -ForegroundColor Cyan
+$CAPath = Join-Path $FullBackup "ADCS"
+New-Item -ItemType Directory -Path $CAPath -Force | Out-Null
+
+if (Test-Path "HKLM:\SYSTEM\CurrentControlSet\Services\CertSvc") {
+    try {
+        certutil -backupDB (Join-Path $CAPath "DB") | Out-Null
+        certutil -backupKey (Join-Path $CAPath "Keys") | Out-Null
+        reg export HKLM\SYSTEM\CurrentControlSet\Services\CertSvc (Join-Path $CAPath "CertSvc.reg") /y | Out-Null
+        Write-Host "✓ ADCS backup completed." -ForegroundColor Green
+        Add-Result "ADCS Backup" "Secure" "Completed" $CAPath
+    }
+    catch {
+        Write-Host "[WARN] ADCS backup failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        Add-Result "ADCS Backup" "Warning" "Failed" $_.Exception.Message
+    }
+}
+else {
+    Write-Host "[WARN] Certificate Services not installed — skipping ADCS backup." -ForegroundColor Yellow
+    Add-Result "ADCS Backup" "Skipped" "CA not installed" ""
+}
 
     # --- SECURITY POLICY BACKUP ---
     Write-Host "[>] Exporting security policy..." -ForegroundColor Cyan
@@ -163,6 +177,7 @@ try {
     Write-Host "[>] Generating WMI inventory (hardware, drivers, services)..." -ForegroundColor Cyan
     $WmiPath = Join-Path $FullBackup "WMI_Inventory"
     New-Item -ItemType Directory -Path $WmiPath -Force | Out-Null
+
 
     Get-WmiObject Win32_ComputerSystem |
         Select-Object Name, Manufacturer, Model, NumberOfProcessors, TotalPhysicalMemory |
@@ -202,12 +217,13 @@ try {
         Write-Host "[WARN] Offsite path not reachable: $RemotePath" -ForegroundColor Yellow
     }
 
-    Add-Result "Full System Backup" "Secure" "Completed" $ZipPath
-}
+}  
+
 catch {
-    Add-Result "Full System Backup" "Warning" "Failed" $_.Exception.Message
+    Add-Result "Full Backup" "Warning" "Failed" $_.Exception.Message
     Write-Host "[-] Backup process failed: $($_.Exception.Message)" -ForegroundColor Red
 }
+
 
 # ----------------------------------------------------------
 # DNS ZONE BACKUP (STATIC FOLDER)
@@ -361,14 +377,38 @@ try {
     Write-Host "✓ Certificates exported." -ForegroundColor Green
 
     # ==========================================================
-    # 3. EVENT FORWARDING & AUDIT POLICIES
-    # ==========================================================
-    Write-Host "[>] Backing up event forwarding subscriptions & audit policy..." -ForegroundColor Cyan
-    $WEFPath = Join-Path $AdvBackup "EventForwarding"
-    New-Item -ItemType Directory -Path $WEFPath -Force | Out-Null
-    wecutil es > "$WEFPath\EventSubscriptions.xml"
-    auditpol /get /category:* > "$WEFPath\AuditPolicy.txt"
-    Write-Host "✓ Event forwarding & audit policies exported." -ForegroundColor Green
+# 3. EVENT FORWARDING & AUDIT POLICIES
+# ==========================================================
+Write-Host "[>] Backing up event forwarding subscriptions & audit policy..." -ForegroundColor Cyan
+$WEFPath = Join-Path $AdvBackup "EventForwarding"
+New-Item -ItemType Directory -Path $WEFPath -Force | Out-Null
+
+# Check if Windows Event Collector service exists
+$wecService = Get-Service -Name wecsvc -ErrorAction SilentlyContinue
+if ($null -ne $wecService) {
+    if ($wecService.Status -ne 'Running') {
+        Write-Host "[INFO] Starting Windows Event Collector service..." -ForegroundColor Yellow
+        Start-Service wecsvc -ErrorAction SilentlyContinue
+    }
+
+    try {
+        wecutil es > "$WEFPath\EventSubscriptions.xml" 2>$null
+        Write-Host "✓ Event subscriptions exported." -ForegroundColor Green
+    }
+    catch {
+        Write-Host "[WARN] Unable to export event subscriptions: $($_.Exception.Message)" -ForegroundColor Yellow
+        Add-Result "Event Forwarding" "Warning" "Failed" $_.Exception.Message
+    }
+}
+else {
+    Write-Host "[WARN] Event Collector service not installed — skipping WEF export." -ForegroundColor Yellow
+    Add-Result "Event Forwarding" "Skipped" "Service not installed" ""
+}
+
+# Always export audit policies
+auditpol /get /category:* > "$WEFPath\AuditPolicy.txt" 2>$null
+Write-Host "✓ Audit policies exported." -ForegroundColor Green
+
 
     # ==========================================================
     # 4. LOCAL SECURITY POLICY
@@ -969,10 +1009,6 @@ foreach ($group in $groups) {
 # ----------------------------------------------------------
 # ADDITIONAL SECURITY MITIGATIONS (auto-enforce if missing)
 # ----------------------------------------------------------
-Write-Host "`n=============================================" -ForegroundColor Cyan
-Write-Host "   ENTERING AUTO-ENFORCE SECURITY PHASE       " -ForegroundColor Cyan
-Write-Host "   (critical domain and OS mitigations)       " -ForegroundColor Cyan
-Write-Host "=============================================" -ForegroundColor Cyan
 
 $phaseStart = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 Write-Host ("[+] Starting Auto-Enforce Security Phase at $phaseStart") -ForegroundColor Yellow
@@ -1105,19 +1141,6 @@ try {
 }
 
 # ----------------------------------------------------------
-# END OF AUTO-ENFORCE SECURITY PHASE
-# ----------------------------------------------------------
-$phaseEnd = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-$phaseDuration = (New-TimeSpan -Start $phaseStart -End $phaseEnd).ToString("hh\:mm\:ss")
-
-Write-Host "`n=============================================" -ForegroundColor Cyan
-Write-Host "   AUTO-ENFORCE SECURITY PHASE COMPLETED       " -ForegroundColor Cyan
-Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host ("[+] Completed at: {0}" -f $phaseEnd) -ForegroundColor Yellow
-Write-Host ("[+] Duration:     {0}" -f $phaseDuration) -ForegroundColor Yellow
-Write-Host "All critical mitigations applied successfully." -ForegroundColor Green
-
-# ----------------------------------------------------------
 # DISABLE UNNECESSARY NETWORK SERVICES
 # ----------------------------------------------------------
 function Disable-Unnecessary-Services {
@@ -1150,84 +1173,6 @@ function Disable-Unnecessary-Services {
 # Execute the function
 Disable-Unnecessary-Services
 
-# ----------------------------------------------------------
-# ELASTIC AGENT INSTALLATION
-# ----------------------------------------------------------
-
-# Helper functions for color-coded output
-function Write-Info ($Message) { Write-Host "[INFO]  $Message" -ForegroundColor Cyan }
-function Write-Ok   ($Message) { Write-Host "[ OK ]  $Message" -ForegroundColor Green }
-function Write-Warn ($Message) { Write-Host "[WARN]  $Message" -ForegroundColor Yellow }
-
-Write-Host "`n[+] Installing Elastic Agent (Fleet enrollment)..." -ForegroundColor Cyan
-
-try {
-    # Define paths and variables
-    $elasticDir  = "C:\ElasticAgent_Install"
-    $zipName     = "elastic-agent-9.2.0+build202510300150-windows-x86_64.zip"
-    $zipPath     = Join-Path $elasticDir $zipName
-    $extractDir  = Join-Path $elasticDir "elastic-agent-9.2.0+build202510300150-windows-x86_64"
-    $installExe  = Join-Path $extractDir "elastic-agent.exe"
-    $fleetUrl    = "https://067639f4e3a64252a8508a5f4f748f78.fleet.us-west-1.aws.found.io:443"
-    $token       = "QjNXTk1ab0JQeHdibEV0U1ZYOV86VXMweTZPbHl5WDRvU0RwNUlSNFJXUQ=="
-
-    # Ensure working directory exists
-    if (-not (Test-Path $elasticDir)) {
-        Write-Info "Creating working directory at $elasticDir..."
-        New-Item -ItemType Directory -Path $elasticDir -Force | Out-Null
-    }
-
-    # Step 1: Verify and enforce TLS 1.2
-    Write-Info "Checking secure protocol support (TLS 1.2)..."
-    $currentProtocols = [Net.ServicePointManager]::SecurityProtocol
-    if (($currentProtocols -band [Net.SecurityProtocolType]::Tls12) -ne [Net.SecurityProtocolType]::Tls12) {
-        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-        Write-Ok "TLS 1.2 has been enabled for this session."
-    } else {
-        Write-Ok "TLS 1.2 is already enabled."
-    }
-
-    # Step 2: Download Elastic Agent package
-    Write-Info "Downloading Elastic Agent package..."
-    $ProgressPreference = 'SilentlyContinue'
-    Invoke-WebRequest -Uri "https://artifacts.elastic.co/downloads/beats/elastic-agent/$zipName" `
-        -OutFile $zipPath -UseBasicParsing -ErrorAction Stop
-    Write-Ok "Downloaded Elastic Agent to $zipPath"
-
-    # Step 3: Extract the archive
-    Write-Info "Extracting Elastic Agent..."
-    Expand-Archive -Path $zipPath -DestinationPath $elasticDir -Force
-    Write-Ok "Extracted to $extractDir"
-
-    # Step 4: Install and enroll with Fleet
-    Write-Info "Running Elastic Agent installation..."
-    Start-Process -FilePath $installExe `
-        -ArgumentList "install --url=$fleetUrl --enrollment-token=$token --force" `
-        -Wait -NoNewWindow
-    Write-Ok "Elastic Agent installed and enrolled successfully."
-
-    # Step 5: Verify installation (list Elastic-related services)
-    Write-Info "Verifying Elastic services..."
-    $elasticServices = Get-Service | Where-Object { $_.DisplayName -like "*Elastic*" } |
-        Select-Object Name, DisplayName, Status, StartType
-    if ($elasticServices) {
-        $elasticServices | Format-Table -AutoSize
-        Write-Ok "Elastic services are installed and running as expected."
-    } else {
-        Write-Warn "No Elastic-related services detected — check installation logs."
-    }
-
-    # Optional reporting (if your script defines Add-Result)
-    if (Get-Command Add-Result -ErrorAction SilentlyContinue) {
-        Add-Result "Elastic Agent" "Secure" "Installed and enrolled" $fleetUrl
-    }
-}
-catch {
-    Write-Warn "Elastic Agent installation failed: $($_.Exception.Message)"
-    if (Get-Command Add-Result -ErrorAction SilentlyContinue) {
-        Add-Result "Elastic Agent" "Warning" "Installation failed" $_.Exception.Message
-    }
-}
 
 # ----------------------------------------------------------
 # CLEAR POWERSHELL HISTORY
@@ -1253,116 +1198,6 @@ catch {
     Write-Host "⚠ Error clearing PowerShell history: $($_.Exception.Message)" -ForegroundColor Red
 }
 
-# -------------------------------------------------------------------
-# SECTION: PATCHES (Ask for version → Download → Install → Verify)
-# -------------------------------------------------------------------
-function Patches {
-
-    Write-Host "=============================" -ForegroundColor Cyan
-    Write-Host "      PATCH MANAGEMENT       " -ForegroundColor Cyan
-    Write-Host "=============================" -ForegroundColor Cyan
-    Write-Host ""
-
-    # Ask user which version of Windows Server
-    $version = Read-Host "Which version of Windows Server do you want to patch? (2016 / 2019 / 2022)"
-    $version = $version.Trim()
-
-    switch ($version) {
-        "2016" {
-            $KB = "KB5070882"
-            $URL = "https://catalog.s.download.windowsupdate.com/c/msdownload/update/software/secu/2025/10/windows10.0-kb5070882-x64_8be784b4bb9c02fc03e8c1fe4d5de74ff3425c44.msu"
-            $File = "KB5070882.msu"
-        }
-        "2019" {
-            $KB = "KB5066187"
-            $URL = "https://catalog.s.download.windowsupdate.com/c/msdownload/update/software/updt/2025/08/windows10.0-kb5066187-x64_c0f018964d6010bb4c6e5bc6ec6dab85499b9f52.msu"
-            $File = "KB5066187.msu"
-        }
-        "2022" {
-            $KB = "KB5066187"
-            $URL = "https://catalog.s.download.windowsupdate.com/c/msdownload/update/software/updt/2025/08/windows10.0-kb5066187-x64_c0f018964d6010bb4c6e5bc6ec6dab85499b9f52.msu"
-            $File = "KB5066187.msu"
-        }
-        default {
-            Write-Host "❌ Invalid selection. Please enter 2016, 2019, or 2022." -ForegroundColor Red
-            return
-        }
-    }
-
-    Write-Host ""
-    Write-Host "You selected Windows Server $version with patch $KB" -ForegroundColor Cyan
-    $confirm = Read-Host "Proceed to download and install this patch? (Y/N)"
-    if ($confirm.ToUpper() -ne "Y") {
-        Write-Host "❌ Operation cancelled by user." -ForegroundColor Yellow
-        return
-    }
-
-    # --- Download patch file ---
-    $destination = Join-Path $env:TEMP $File
-    Write-Host ""
-    Write-Host "Downloading patch file ($KB) ..." -ForegroundColor Yellow
-
-    try {
-        Start-BitsTransfer -Source $URL -Destination $destination -ErrorAction Stop
-        Write-Host "✅ Download complete: $destination" -ForegroundColor Green
-    }
-    catch {
-        Write-Warning "BITS transfer failed — attempting fallback download..."
-        try {
-            Invoke-WebRequest -Uri $URL -OutFile $destination -UseBasicParsing -ErrorAction Stop
-            Write-Host "✅ Download complete via fallback: $destination" -ForegroundColor Green
-        }
-        catch {
-            Write-Host "❌ Download failed: $_" -ForegroundColor Red
-            return
-        }
-    }
-
-    if (-not (Test-Path $destination)) {
-        Write-Host "❌ Patch file not found after download." -ForegroundColor Red
-        return
-    }
-
-    # --- Install patch silently ---
-    Write-Host ""
-    Write-Host "Installing patch $KB ..." -ForegroundColor Cyan
-    try {
-        Start-Process -FilePath "wusa.exe" -ArgumentList "$destination", "/quiet", "/norestart" -Wait -ErrorAction Stop
-        Write-Host "✅ Installation command executed." -ForegroundColor Green
-    } catch {
-        Write-Host "❌ Failed to start wusa installer: $_" -ForegroundColor Red
-        return
-    }
-
-    # --- Track installation progress ---
-    Start-Sleep -Seconds 5
-    while (Get-Process wusa -ErrorAction SilentlyContinue) {
-        Write-Host "Windows update installation in progress..." -ForegroundColor Yellow
-        Start-Sleep -Seconds 30
-    }
-
-    Write-Host ""
-    Write-Host "✅ Windows update installation complete. Please reboot your server." -ForegroundColor Green
-
-    # --- Verify installation ---
-    Write-Host ""
-    Write-Host "Verifying installation of $KB ..." -ForegroundColor Cyan
-    $verify = Get-HotFix | Where-Object { $_.HotFixID -eq $KB }
-    if ($verify) {
-        Write-Host "✅ Patch $KB successfully installed on $($verify.InstalledOn)." -ForegroundColor Green
-    }
-    else {
-        Write-Host "⚠️  Patch $KB not found in Get-HotFix. It may appear after reboot." -ForegroundColor Yellow
-    }
-
-    Write-Host ""
-    Write-Host "Patch process finished for Windows Server $version." -ForegroundColor Cyan
-}
-
-# -------------------------------------------------------------------
-# AUTO RUN PATCHES SECTION
-# -------------------------------------------------------------------
-Patches
 
 # FINAL SUMMARY
 # ----------------------------------------------------------
@@ -1384,4 +1219,5 @@ Write-Host ("-------------------------------------------") -ForegroundColor Cyan
 Write-Host ("Total Checks: {0}" -f $Results.Count) -ForegroundColor White
 Write-Host ("Report saved to {0}" -f $summaryPath) -ForegroundColor Cyan
 Write-Host "===========================================" -ForegroundColor Cyan
+
 
