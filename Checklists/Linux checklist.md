@@ -45,6 +45,7 @@ Then! Navigate to the IP of your box with the ports in a browser to investigate 
 ```
 tar -cvf archive.tar /path/to/directory
 Check /opt, /etc, /var, home directories
+mysqldump for mysql databases
 ```
 - [ ] Evaluate common vulnerabilities (anonymous login, critical/high CVEs, exposed filesystems in file shares, etc.)
 ```
