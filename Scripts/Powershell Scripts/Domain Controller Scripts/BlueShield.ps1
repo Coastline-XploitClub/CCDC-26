@@ -78,7 +78,6 @@ Write-Host "`n[+] Starting full backup sequence..." -ForegroundColor Cyan
 $RootBackup = "C:\BlueShield_Backups"
 $FullBackup = Join-Path $RootBackup "DC_Full_Backup"
 $Timestamp  = Get-Date -Format "yyyyMMdd_HHmmss"
-$ZipPath    = Join-Path $RootBackup ("DC_Backup_{0}.zip" -f $Timestamp)
 $Inventory  = Join-Path $FullBackup "Backup_Inventory.txt"
 
 try {
@@ -197,25 +196,6 @@ else {
 
     Write-Host "✓ WMI inventory completed." -ForegroundColor Green
 
-    # --- INVENTORY & COMPRESSION ---
-    Write-Host "[>] Creating backup inventory..." -ForegroundColor Cyan
-    Get-ChildItem $FullBackup -Recurse | Select-Object FullName, Length, LastWriteTime |
-        Out-File $Inventory
-    Write-Host "✓ Inventory file generated." -ForegroundColor Green
-
-    Write-Host "[>] Compressing all backups..." -ForegroundColor Cyan
-    Compress-Archive -Path "$FullBackup\*" -DestinationPath $ZipPath -Force
-    Write-Host "✓ Backup archive created: $ZipPath" -ForegroundColor Green
-
-    # --- OFFSITE COPY (OPTIONAL) ---
-    $RemotePath = "\\tsclient\H\Xsploit Club"
-    if (Test-Path $RemotePath) {
-        Copy-Item -Path $ZipPath -Destination $RemotePath -Force
-        Write-Host "✓ Offsite copy stored to $RemotePath" -ForegroundColor Green
-    }
-    else {
-        Write-Host "[WARN] Offsite path not reachable: $RemotePath" -ForegroundColor Yellow
-    }
 
 }  
 
@@ -246,7 +226,7 @@ if (-not (Get-Command Add-Result -ErrorAction SilentlyContinue)) {
 Write-Host "`n[+] Performing DNS zone backup..." -ForegroundColor Cyan
 $BackupRoot = "C:\BlueShield_Backups\DNS_Backups"
 $BackupDir  = Join-Path $BackupRoot "Latest"
-$zipPath    = Join-Path $BackupRoot "DNS_Backup_Latest.zip"
+
 
 try {
     # Ensure folders exist
@@ -322,13 +302,6 @@ try {
             Write-Warning ("Failed to export detailed DNS records: {0}" -f $_.Exception.Message)
         }
 
-        # Compress the backup
-        if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-        Compress-Archive -Path "$BackupDir\*" -DestinationPath $zipPath -Force
-        Add-Result "DNS Zone Backup" "Secure" "All zones exported" $zipPath
-
-        Write-Host "`nDNS zone backup complete!" -ForegroundColor Cyan
-        Write-Host ("ZIP saved to: {0}" -f $zipPath) -ForegroundColor Yellow
     }
 }
 catch {
@@ -343,7 +316,7 @@ Write-Host "`n[+] Performing advanced system backups..." -ForegroundColor Cyan
 $RootBackup = "C:\BlueShield_Backups"
 $AdvBackup  = Join-Path $RootBackup "DC_Advanced_Backup"
 $Timestamp  = Get-Date -Format "yyyyMMdd_HHmmss"
-$ZipPath    = Join-Path $RootBackup ("DC_Advanced_{0}.zip" -f $Timestamp)
+
 
 try {
     # Ensure directory
@@ -493,14 +466,6 @@ Write-Host "✓ Audit policies exported." -ForegroundColor Green
         Write-Host "[WARN] autorunsc.exe not found — skipping Autoruns backup." -ForegroundColor Yellow
     }
 
-    # ==========================================================
-    # FINALIZE
-    # ==========================================================
-    Write-Host "[>] Compressing advanced backups..." -ForegroundColor Cyan
-    Compress-Archive -Path "$AdvBackup\*" -DestinationPath $ZipPath -Force
-    Write-Host "✓ Archive created: $ZipPath" -ForegroundColor Green
-
-    Add-Result "Advanced Backups" "Secure" "Completed" $ZipPath
 }
 catch {
     Add-Result "Advanced Backups" "Warning" "Failed" $_.Exception.Message
@@ -1198,6 +1163,84 @@ function Disable-Unnecessary-Services {
 # Execute the function
 Disable-Unnecessary-Services
 
+# ----------------------------------------------------------
+# ELASTIC AGENT INSTALLATION
+# ----------------------------------------------------------
+
+# Helper functions for color-coded output
+function Write-Info ($Message) { Write-Host "[INFO]  $Message" -ForegroundColor Cyan }
+function Write-Ok   ($Message) { Write-Host "[ OK ]  $Message" -ForegroundColor Green }
+function Write-Warn ($Message) { Write-Host "[WARN]  $Message" -ForegroundColor Yellow }
+
+Write-Host "`n[+] Installing Elastic Agent (Fleet enrollment)..." -ForegroundColor Cyan
+
+try {
+    # Define paths and variables
+    $elasticDir  = "C:\ElasticAgent_Install"
+    $zipName     = "elastic-agent-9.2.0+build202510300150-windows-x86_64.zip"
+    $zipPath     = Join-Path $elasticDir $zipName
+    $extractDir  = Join-Path $elasticDir "elastic-agent-9.2.0+build202510300150-windows-x86_64"
+    $installExe  = Join-Path $extractDir "elastic-agent.exe"
+    $fleetUrl    = "https://5fb1aa0536994ea7b1e38b581dcff047.fleet.us-west-1.aws.found.io:443"
+    $token       = "SmZOYmc1b0JwaGg4MDdnZHZKbWY6LTMydFd6NHBMOHNmS0U0ajM5Q19hdw=="
+
+    # Ensure working directory exists
+    if (-not (Test-Path $elasticDir)) {
+        Write-Info "Creating working directory at $elasticDir..."
+        New-Item -ItemType Directory -Path $elasticDir -Force | Out-Null
+    }
+
+    # Step 1: Verify and enforce TLS 1.2
+    Write-Info "Checking secure protocol support (TLS 1.2)..."
+    $currentProtocols = [Net.ServicePointManager]::SecurityProtocol
+    if (($currentProtocols -band [Net.SecurityProtocolType]::Tls12) -ne [Net.SecurityProtocolType]::Tls12) {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        Write-Ok "TLS 1.2 has been enabled for this session."
+    } else {
+        Write-Ok "TLS 1.2 is already enabled."
+    }
+
+    # Step 2: Download Elastic Agent package
+    Write-Info "Downloading Elastic Agent package..."
+    $ProgressPreference = 'SilentlyContinue'
+    Invoke-WebRequest -Uri "https://artifacts.elastic.co/downloads/beats/elastic-agent/$zipName" `
+        -OutFile $zipPath -UseBasicParsing -ErrorAction Stop
+    Write-Ok "Downloaded Elastic Agent to $zipPath"
+
+    # Step 3: Extract the archive
+    Write-Info "Extracting Elastic Agent..."
+    Expand-Archive -Path $zipPath -DestinationPath $elasticDir -Force
+    Write-Ok "Extracted to $extractDir"
+
+    # Step 4: Install and enroll with Fleet
+    Write-Info "Running Elastic Agent installation..."
+    Start-Process -FilePath $installExe `
+        -ArgumentList "install --url=$fleetUrl --enrollment-token=$token --force" `
+        -Wait -NoNewWindow
+    Write-Ok "Elastic Agent installed and enrolled successfully."
+
+    # Step 5: Verify installation (list Elastic-related services)
+    Write-Info "Verifying Elastic services..."
+    $elasticServices = Get-Service | Where-Object { $_.DisplayName -like "*Elastic*" } |
+        Select-Object Name, DisplayName, Status, StartType
+    if ($elasticServices) {
+        $elasticServices | Format-Table -AutoSize
+        Write-Ok "Elastic services are installed and running as expected."
+    } else {
+        Write-Warn "No Elastic-related services detected — check installation logs."
+    }
+
+    # Optional reporting (if your script defines Add-Result)
+    if (Get-Command Add-Result -ErrorAction SilentlyContinue) {
+        Add-Result "Elastic Agent" "Secure" "Installed and enrolled" $fleetUrl
+    }
+}
+catch {
+    Write-Warn "Elastic Agent installation failed: $($_.Exception.Message)"
+    if (Get-Command Add-Result -ErrorAction SilentlyContinue) {
+        Add-Result "Elastic Agent" "Warning" "Installation failed" $_.Exception.Message
+    }
+}
 
 # ----------------------------------------------------------
 # CLEAR POWERSHELL HISTORY
@@ -1244,4 +1287,3 @@ Write-Host ("-------------------------------------------") -ForegroundColor Cyan
 Write-Host ("Total Checks: {0}" -f $Results.Count) -ForegroundColor White
 Write-Host ("Report saved to {0}" -f $summaryPath) -ForegroundColor Cyan
 Write-Host "===========================================" -ForegroundColor Cyan
-
