@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
   BlueShield – Domain Controller Security Hardening & Audit
+  Author: Cesar
 
 .DESCRIPTION
   Comprehensive hardening & auditing tool for Windows Server Domain Controllers:
@@ -1131,29 +1132,92 @@ try {
 }
 
 # ----------------------------------------------------------
-# DISABLE UNNECESSARY NETWORK SERVICES
+# DISABLE UNNECESSARY NETWORK SERVICES (Secure Production Mode)
 # ----------------------------------------------------------
 function Disable-Unnecessary-Services {
-    Write-Host "`n[+] Disabling unnecessary network services..." -ForegroundColor Cyan
+    Write-Host "`n[+] Disabling unnecessary network services (Secure Production Mode)..." -ForegroundColor Cyan
+
     try {
+        # -----------------------------
+        # Disable IPv6 on active adapters
+        # -----------------------------
         $activeAdapters = Get-NetAdapter | Where-Object { $_.Status -eq "Up" }
 
         foreach ($adapter in $activeAdapters) {
-            # Disable IPv6
             Disable-NetAdapterBinding -Name $adapter.Name -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue
-
-            # Optional: Disable File and Printer Sharing (uncomment if desired)
-            # Disable-NetAdapterBinding -Name $adapter.Name -ComponentID ms_server -ErrorAction SilentlyContinue
         }
 
-        # Disable NetBIOS over TCP/IP (NetbiosOptions = 2)
+        # -----------------------------
+        # Disable NetBIOS over TCP/IP
+        # -----------------------------
         $adapters = Get-WmiObject -Class Win32_NetworkAdapterConfiguration -Filter "IPEnabled=True"
         foreach ($adapter in $adapters) {
-            $adapter.SetTcpipNetbios(2) | Out-Null
+            $adapter.SetTcpipNetbios(2) | Out-Null   # 2 = Disable
         }
 
-        Add-Result "Disable Unnecessary Services" "Secure" "IPv6 and NetBIOS disabled" "All active adapters"
-        Write-Host " IPv6 and NetBIOS disabled on active adapters." -ForegroundColor Green
+        # -----------------------------
+        # Disable SSDP Discovery Service (SSDP)
+        # Attack surface: UPnP enumeration, device spoofing
+        # -----------------------------
+        Set-Service -Name SSDPSRV -StartupType Disabled -ErrorAction SilentlyContinue
+        Stop-Service SSDPSRV -Force -ErrorAction SilentlyContinue
+
+        # -----------------------------
+        # Disable UPnP Device Host 
+        # Attack surface: automatic device trust, local pivoting
+        # -----------------------------
+        Set-Service -Name upnphost -StartupType Disabled -ErrorAction SilentlyContinue
+        Stop-Service upnphost -Force -ErrorAction SilentlyContinue
+
+        # -----------------------------
+        # Disable WebClient (WebDAV Redirector)
+        # Attack surface: NTLM relay over WebDAV
+        # -----------------------------
+        Set-Service -Name WebClient -StartupType Disabled -ErrorAction SilentlyContinue
+        Stop-Service WebClient -ErrorAction SilentlyContinue
+
+        # -----------------------------
+        # Disable Remote Assistance 
+        # -----------------------------
+        Set-Service -Name MsraSvc -StartupType Disabled -ErrorAction SilentlyContinue
+        Stop-Service MsraSvc -ErrorAction SilentlyContinue
+
+        # -----------------------------
+        # Disable Telnet (if installed)
+        # -----------------------------
+        if (Get-Service -Name TlntSvr -ErrorAction SilentlyContinue) {
+            Set-Service -Name TlntSvr -StartupType Disabled -ErrorAction SilentlyContinue
+            Stop-Service TlntSvr -ErrorAction SilentlyContinue
+        }
+
+        # -----------------------------
+        # Disable SNMP (if installed)
+        # -----------------------------
+        if (Get-Service -Name SNMP -ErrorAction SilentlyContinue) {
+            Set-Service -Name SNMP -StartupType Disabled -ErrorAction SilentlyContinue
+            Stop-Service SNMP -ErrorAction SilentlyContinue
+        }
+
+        # -----------------------------
+        # Disable Function Discovery Publication (reduces lateral movement)
+        # -----------------------------
+        Set-Service -Name FDResPub -StartupType Disabled -ErrorAction SilentlyContinue
+        Stop-Service FDResPub -ErrorAction SilentlyContinue
+
+        # -----------------------------
+        # Disable Web Services for Devices (WSD)
+        # -----------------------------
+        Set-Service -Name WSearch -StartupType Disabled -ErrorAction SilentlyContinue
+        Stop-Service WSearch -ErrorAction SilentlyContinue
+
+        # -----------------------------
+        # Record result
+        # -----------------------------
+        Add-Result "Disable Unnecessary Services" "Secure" "Production-safe hardening applied" `
+                   "IPv6, NetBIOS, SSDP, UPnP, WebClient, Remote Assistance, Telnet, SNMP, FDResPub, WSD"
+
+        Write-Host "✓ Secure Production Mode: unnecessary network services disabled." -ForegroundColor Green
+
     } catch {
         Add-Result "Disable Unnecessary Services" "Warning" "Failed" $_.Exception.Message
         Write-Host ("  Error disabling unnecessary services: {0}" -f $_.Exception.Message) -ForegroundColor Red
