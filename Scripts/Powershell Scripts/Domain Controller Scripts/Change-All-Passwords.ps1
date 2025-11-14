@@ -1,48 +1,66 @@
 Import-Module ActiveDirectory
 
-$ExcludeGroup = "Domain Admins"
-$OutputFile = "\\tsclient\H\Xsploit Club\DomainPasswordChanges_$((Get-Date).ToString('yyyyMMdd_HHmm')).csv"
-
 function New-StrongPassword {
-    $Length = Get-Random -Minimum 14 -Maximum 17
-    $lower   = 'abcdefghjkmnpqrstuvwxyz'.ToCharArray()
-    $upper   = 'ABCDEFGHJKMNPQRSTUVWXYZ'.ToCharArray()
-    $digits  = '23456789'.ToCharArray()
-    $special = '!@#$%^&*()-_=+'.ToCharArray()
-
-    $pw = @()
-    $pw += ($lower | Get-Random -Count 2)
-    $pw += ($upper | Get-Random -Count 2)
-    $pw += ($digits | Get-Random -Count 2)
-    $pw += ($special| Get-Random -Count 2)
-    $all = $lower + $upper + $digits + $special
-    $pw += ($all | Get-Random -Count ($Length - $pw.Count))
-    return -join ($pw | Get-Random -Count $pw.Count)
+    $length = 14
+    $upper   = (65..90   | ForEach-Object {[char]$_}) # A-Z
+    $lower   = (97..122  | ForEach-Object {[char]$_}) # a-z
+    $numbers = (48..57   | ForEach-Object {[char]$_}) # 0-9
+    $special = "!@#$%^&*()-_=+[]{}<>?|".ToCharArray()
+    $all     = $upper + $lower + $numbers + $special
+    $passwordArray = @(
+        ($upper   | Get-Random -Count 1) +
+        ($lower   | Get-Random -Count 1) +
+        ($numbers | Get-Random -Count 1) +
+        ($special | Get-Random -Count 1) +
+        ($all     | Get-Random -Count ($length - 4))
+    )
+    $passwordArray = $passwordArray -join ''
+    $shuffledPassword = ($passwordArray.ToCharArray() | Sort-Object {Get-Random}) -join ''
+    return $shuffledPassword
 }
 
-Write-Host "Gathering enabled users except Domain Admins..." -ForegroundColor Cyan
-$excludeUsers = (Get-ADGroupMember $ExcludeGroup -Recursive |
-                 Where-Object {$_.objectClass -eq 'user'}).SamAccountName
-$excludeUsers += @('Administrator','krbtgt','Guest')
+# Output file path (Excel compatible)
+$OutputFile = "C:\Users\Administrator\Documents\Domain_Passwords_$((Get-Date).ToString('yyyyMMdd_HHmm')).csv"
 
-$users = Get-ADUser -Filter {Enabled -eq $true} -Properties SamAccountName |
-         Where-Object { $excludeUsers -notcontains $_.SamAccountName }
+# Excluded groups and users
+$excludedGroups = @("Domain Admins", "Enterprise Admins")
+$excludedUsers = foreach ($group in $excludedGroups) {
+    Get-ADGroupMember -Identity $group -Recursive | Select-Object -ExpandProperty SamAccountName
+}
+$excludedUsers += @("Administrator", "krbtgt", "Guest", "DefaultAccount")
+$excludedUsers = $excludedUsers | Select-Object -Unique
 
-Write-Host "Found $($users.Count) users to process." -ForegroundColor Green
+# Collect users
+$users = Get-ADUser -Filter * | Where-Object {
+    $_.SamAccountName -notin $excludedUsers
+}
+
+# Array to hold results
 $results = @()
 
 foreach ($u in $users) {
     $user = $u.SamAccountName
-    $pwd = New-StrongPassword
+    $pwd  = New-StrongPassword
     $secure = ConvertTo-SecureString $pwd -AsPlainText -Force
+
     try {
         Set-ADAccountPassword -Identity $user -Reset -NewPassword $secure -ErrorAction Stop
-        Write-Host "Password changed for $user" -ForegroundColor Green
-        $results += [PSCustomObject]@{UserName=$user;NewPassword=$pwd;Combined="$user`:$pwd"}
+        Write-Host "✅ Password changed for $user" -ForegroundColor Green
+        $results += [PSCustomObject]@{
+            Username    = $user
+            Password    = $pwd
+            Combined    = "$user,$pwd"
+        }
     } catch {
-        Write-Host "Failed to change password for $user" -ForegroundColor Red
+        Write-Host "❌ Failed to change password for $user" -ForegroundColor Red
+        $results += [PSCustomObject]@{
+            Username    = $user
+            Password    = "FAILED"
+            Combined    = "$user,FAILED"
+        }
     }
 }
 
+# Export to Excel (CSV)
 $results | Export-Csv -Path $OutputFile -NoTypeInformation -Encoding UTF8
 Write-Host "`nAll results saved to: $OutputFile" -ForegroundColor Cyan
