@@ -17,7 +17,7 @@ if (-not $RemoteComputers) {
 $ConnCred = Get-Credential -Message 'Credentials to connect to remote hosts (use .\Administrator)'
 
 # Define users to create or update
-$UserNames = @('cesar_la', 'ruby_la', 'peter_la')
+$UserNames = @('cesar_la', 'joseph_la', 'sevag_la')
 
 # Prompt for password for the new users
 $UserPasswordSecure = Read-Host -AsSecureString "Enter password for the new users"
@@ -115,6 +115,7 @@ Remove-Job -Job $Jobs
 
 # Display formatted output
 $AllResults | Sort-Object Computer, User | Format-Table Computer, User, Result -AutoSize
+
 
 
 
