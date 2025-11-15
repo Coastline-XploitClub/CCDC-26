@@ -20,32 +20,45 @@ auditd_highvolumeevents: false
 ############################
 
 # Blacklist for SUID/SGID entries to be removed
-# Taken from dev-sec/ansible-collection-hardening
+# Cherrypicked from gtfobins.github.io
 uid_sgid_system_blacklist:
-  # blacklist as provided by NSA
-  - /usr/bin/rcp
-  - /usr/bin/rlogin
-  - /usr/bin/rsh
-  # sshd must not use host-based authentication (see ssh cookbook)
-  - /usr/libexec/openssh/ssh-keysign
-  - /usr/lib/openssh/ssh-keysign
-  # misc others
-  - /sbin/netreport # not normally required for user
-  - /usr/sbin/usernetctl # modify interfaces via functional accounts
-  # connecting to ...
-  - /usr/sbin/userisdnctl # no isdn...
-  - /usr/sbin/pppd # no ppp / dsl ...
-  # lockfile
-  - /usr/bin/lockfile
-  - /usr/bin/mail-lock
-  - /usr/bin/mail-unlock
-  - /usr/bin/mail-touchlock
-  - /usr/bin/dotlockfile
-  # need more investigation blacklist for now
-  - /usr/bin/arping
-  - /usr/sbin/uuidd
-  - /usr/bin/mtr # investigate current state...
-  - /usr/lib/evolution/camel-lock-helper-1.2 # investigate current state...
-  - /usr/lib/pt_chown # pseudo-tty needed?
-  - /usr/lib/eject/dmcrypt-get-device
-  - /usr/lib/mc/cons.saver # midnight commander screensaver
+  - /usr/bin/arp
+  - /bin/ash
+  - /usr/bin/awk
+  - /bin/bash
+  - /bin/cat
+  - /usr/bin/chmod
+  - /usr/bin/chroot
+  - /usr/bin/chown
+  - /bin/cp
+  - /usr/bin/curl
+  - /usr/bin/cut
+  - /usr/bin/date
+  - /usr/bin/dd
+  - /usr/local/bin/docker
+  - /usr/bin/file
+  - /usr/bin/find
+  - /usr/bin/grep
+  - /usr/bin/head
+  - /usr/bin/hexdump
+  - /usr/bin/ip
+  - /usr/bin/jq
+  - /usr/bin/ld.so
+  - /usr/local/bin/kubectl
+  - /usr/bin/less
+  - /bin/mv
+  - /usr/bin/sed
+  - /usr/bin/ss
+  - /usr/bin/ssh-agent
+  - /usr/bin/ssh-keygen
+  - /usr/bin/ssh-keyscan
+  - /usr/bin/strings
+  - /usr/bin/tail
+  - /usr/bin/sysctl
+  - /usr/bin/systemctl
+  - /usr/bin/tee
+  - /usr/bin/uniq
+  - /usr/bin/vim
+  - /usr/bin/wget
+  - /usr/bin/xxd
+  - /bin/zsh

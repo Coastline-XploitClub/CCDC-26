@@ -9,18 +9,18 @@
 
 [vanilla_linux_ssh] # Unconfigured boxes that have ssh as a scored service
 # toonami   ansible_host=192.168.220.101
+athens ansible_host=192.168.1.173
+hephaestus ansible_host=192.168.1.2
 
 [vanilla_linux] # Unconfigured boxes that will run full baseline config
 # toonami     ansible_host=192.168.220.101
-laboratory  ansible_host=192.168.220.70
-hellcreek   ansible_host=192.168.220.103
+cerebrum ansible_host=192.168.1.109
+hera ansible_host=192.168.1.111
+zeus ansible_host=192.168.1.103
+hermes ansible_host=192.168.1.5
 
 [linux] # Configured boxes
 # eddieneddy ansible_host=192.168.220.13
-pangea      ansible_host=192.168.220.2
-badlands    ansible_host=192.168.220.104
-hatchery    ansible_host=192.168.220.76
-tarpit      ansible_host=192.168.220.170
 
 
 ###############
