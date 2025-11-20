@@ -27,7 +27,7 @@ systemctl --type=service --state=running
 ```
 - [ ] Enumeration/understanding of web services and services running (what is their purpose? What does it do? Is it necessary? Can it be abused?)
 ```
-For web services, run netstat -tunalp and look for ports like 80 443 8080 9000 and common web ports. 
+For web services, run netstat -tunalp and look for ports like 80 443 8080 9000 and common web ports.
 Then! Navigate to the IP of your box with the ports in a browser to investigate the web apps
 
 👁️‍🗨️ Document:
@@ -40,6 +40,17 @@ Then! Navigate to the IP of your box with the ports in a browser to investigate 
   - If sensitive data/PII stored and where
   - If anonymous/no-password login
   - Are there domain accounts?
+```
+- [ ] IF you have a docker container, enumerate the container info
+```
+docker ps
+docker inspect <container ID>
+
+To find yaml (or .yml) files for docker compose:
+find / -iname *.yaml
+
+Examine docker compose, back up compose file and any volumes. You can tar bind mounts (directories) directly, or use the following command:
+docker run --rm --volumes-from <CONTAINER NAME> -v $(pwd):/backup ubuntu tar cvf /backup/backup.tar /<VOLUME_NAME>
 ```
 - [ ] Backups of all default configuration files and databases
 ```
