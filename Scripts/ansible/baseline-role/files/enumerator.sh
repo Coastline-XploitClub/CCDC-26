@@ -31,7 +31,8 @@ show_menu() {
     printf "5) List firewall rules (iptables, ufw, or firewalld)\n"
     printf "6) Change passwords for users in privileged groups and save them (WARNING: DANGEROUS)\n"
     printf "7) List all installed software\n"
-    printf "8) Exit\n"
+    printf "8) Show running Docker containers\n"
+    printf "9) Exit\n"
     printf "%s" "$NC"
 }
 
@@ -267,7 +268,16 @@ execute_option() {
                 echo ""
             fi
             ;;
-        8)
+        8) 
+            echo "Enumerating Docker containers..."
+            if command -v docker > /dev/null 2>&1; then
+                echo "Docker found!"
+                docker ps
+            else
+                echo "Docker not installed."
+            fi
+            ;;
+        9)
             echo "Exiting the script."
             exit 0
             ;;
