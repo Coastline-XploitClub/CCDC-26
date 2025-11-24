@@ -1,7 +1,7 @@
 # ======================================================================
 #   DNS HARDENING SCRIPT – Windows Server 2016 (NO DNSSEC)
-#   Author: ChatGPT + Cesar
-#   Version: CCDC/Invitational-Optimized
+#   Author: Cesar
+#   Version: CCDC
 # ======================================================================
 
 Write-Host "`n========== DNS HARDENING ==========" -ForegroundColor Cyan
@@ -116,3 +116,4 @@ Write-Host "[OK] Randomized port behavior strengthened." -ForegroundColor Green
 
 
 Write-Host "`n========== DNS HARDENING COMPLETE ==========" -ForegroundColor Cyan
+
