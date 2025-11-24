@@ -2,23 +2,29 @@ Import-Module ActiveDirectory
 
 function New-StrongPassword {
     $length = 14
-    $upper   = (65..90   | ForEach-Object {[char]$_}) # A-Z
-    $lower   = (97..122  | ForEach-Object {[char]$_}) # a-z
-    $numbers = (48..57   | ForEach-Object {[char]$_}) # 0-9
-    $special = "!@#$%^&*()-_=+[]{}<>?|".ToCharArray()
+    $upper   = (65..90   | ForEach-Object {[char]$_})   # A-Z
+    $lower   = (97..122  | ForEach-Object {[char]$_})   # a-z
+    $numbers = (48..57   | ForEach-Object {[char]$_})   # 0-9
+    $special = "@$%^&*()-_=+[]{}<>?".ToCharArray()       # Special chars
     $all     = $upper + $lower + $numbers + $special
+
+    # Guarantee at least 1 of each category
     $passwordArray = @(
-        ($upper   | Get-Random -Count 1) +
-        ($lower   | Get-Random -Count 1) +
-        ($numbers | Get-Random -Count 1) +
-        ($special | Get-Random -Count 1) +
-        ($all     | Get-Random -Count ($length - 4))
+        ($upper   | Get-Random -Count 1)
+        ($lower   | Get-Random -Count 1)
+        ($numbers | Get-Random -Count 1)
+        ($special | Get-Random -Count 1)
     )
-    $passwordArray = $passwordArray -join ''
-    $shuffledPassword = ($passwordArray.ToCharArray() | Sort-Object {Get-Random}) -join ''
+
+    # Fill the remaining length with fully random characters
+    $remaining = $length - $passwordArray.Count
+    $passwordArray += ($all | Get-Random -Count $remaining)
+
+    # Shuffle the final password
+    $shuffledPassword = ($passwordArray | Sort-Object {Get-Random}) -join ''
+
     return $shuffledPassword
 }
-
 # Output file path (Excel compatible)
 $OutputFile = "C:\Users\Administrator\Documents\Domain_Passwords_$((Get-Date).ToString('yyyyMMdd_HHmm')).csv"
 
