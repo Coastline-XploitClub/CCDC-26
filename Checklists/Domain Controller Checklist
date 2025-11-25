@@ -17,7 +17,7 @@ This checklist outlines the actions to secure and stabilize the Domain Controlle
 	This confirms what services are exposed before hardening begins.
 
 ## 3. Run the Full Domain Controller Backup. 
-		a. Execute Full_DC_Backup.ps1 to generate a full backup: [Link Text] (https://github.com/Coastline-XploitClub/CCDC-26/blob/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/Full_DC_Backup.ps1)
+		a. Execute Full_DC_Backup.ps1 to generate a full backup: https://github.com/Coastline-XploitClub/CCDC-26/blob/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/Full_DC_Backup.ps1
 ##4. Apply DNS Hardening
 		a. Run the DNS_Hardening.ps1 script.
 		b. Here is the url: https://github.com/Coastline-XploitClub/CCDC-26/blob/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/DNS_Hardening.ps1
