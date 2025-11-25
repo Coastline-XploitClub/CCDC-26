@@ -1,6 +1,6 @@
 <#
 ===============================================================
- SCORE ENGINE DISCOVERY TOOL
+ SCORE ENGINE DISCOVERY TOOL CREATED BY CESAR
  - Reads Windows Firewall Log (pfirewall.log)
  - Extracts DROP entries
  - Shows all ports per IP + hit counts
@@ -225,4 +225,5 @@ try {
 Write-Host "`n====================================================" -ForegroundColor Cyan
 Write-Host "   SCORE ENGINE DISCOVERY COMPLETED" -ForegroundColor Cyan
 Write-Host "====================================================" -ForegroundColor Cyan
+
 
