@@ -2,23 +2,23 @@
 
 This checklist outlines the actions to secure and stabilize the Domain Controller during the first 15 minutes of the competition.
 
-1. Log in to the Domain Controller
+## 1. Log in to the Domain Controller
 		• Use the default password provided by CCDC.
 		• Immediately change the Administrator password to the team-approved password.
 	Example:
 		• Default password: OMGaTREX1?
 		• New team password: Lily-hen-seminar123?
 		• Update the PCRs if required
-2. Initial Recon – Identify Open Ports
+## 2. Initial Recon – Identify Open Ports
 	Run an Nmap scan from the Kali machine:
 	
 	sudo nmap 192.168.220.12
 	
 	This confirms what services are exposed before hardening begins.
 
-	3. Run the Full Domain Controller Backup. 
+## 3. Run the Full Domain Controller Backup. 
 		a. Execute Full_DC_Backup.ps1 to generate a full backup:: https://github.com/Coastline-XploitClub/CCDC-26/blob/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/Full_DC_Backup.ps1
-	4. Apply DNS Hardening
+##4. Apply DNS Hardening
 		a. Run the DNS_Hardening.ps1 script.
 		b. Here is the url: https://github.com/Coastline-XploitClub/CCDC-26/blob/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/DNS_Hardening.ps1
 			Enable DNSSEC Manually
@@ -36,10 +36,10 @@ This checklist outlines the actions to secure and stabilize the Domain Controlle
 		f. 
 		g. Just refresh and it will be enabled.
 		h. 
-	5. Apply Domain Firewall Hardening (Template Creation)
+## 5. Apply Domain Firewall Hardening (Template Creation)
 		a. Run Firewall_Rules.ps1, which creates the Domain Hardening GPO automatically:
 		b. You can find the script by using the following url: https://github.com/Coastline-XploitClub/CCDC-26/blob/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/Firewall_Rules.ps1
-	6. Configure Logging for the Domain Hardening GPO 
+## 6. Configure Logging for the Domain Hardening GPO 
 		After the GPO is created:
 			1. Open Group Policy Management.
 			2. Navigate to Domain Controllers → Domain Hardening.
@@ -47,16 +47,7 @@ This checklist outlines the actions to secure and stabilize the Domain Controlle
             Computer Configuration → Policies → Windows Settings → Security Settings → Advanced Audit Policy
 			4. Enable the required logging settings (follow your internal logging guide or screenshots).
 		
-		
-		a. 
-		b. 
-			
-		c. 
-		
-		d. 
-		
-		e. 
-	7. Discover and Whitelist the Score Engine
+##7. Discover and Whitelist the Score Engine
 		
 		a. You can find that script using the following url: https://github.com/Coastline-XploitClub/CCDC-26/blob/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/ScoreEngine-Discovery.ps1
 		b. Follow the outputs. 
@@ -65,20 +56,20 @@ This checklist outlines the actions to secure and stabilize the Domain Controlle
 		• It automatically adds a firewall rule to allow it.
 		• Follow the script output and verify the rule appears under the Domain Hardening GPO.
 		
-	8. Run BlueShield Hardening
+## 8. Run BlueShield Hardening
 	Execute BlueShield.ps1 to apply overall AD, Kerberos, LSASS, Defender, and service hardening:
 		a. You can find the script by following the next url: https://github.com/Coastline-XploitClub/CCDC-26/blob/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/BlueShield.ps1
 		• Follow the interactive prompts and apply secure defaults.
 		• Do not disable IPv6 unless absolutely necessary for the competition.
 		
-	9. Change All User Passwords (Except Administrator)
+## 9. Change All User Passwords (Except Administrator)
 		a. Follow the next url to find the script: https://github.com/Coastline-XploitClub/CCDC-26/blob/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/Change-All-Passwords.ps1
 		b. Update the PCRs if it is required. 
 	• This rotates passwords for every domain user.
 	• Administrator uses the password you manually set earlier.
 
 	
-	10. Begin Full Enumeration
+## 10. Begin Full Enumeration
 	Once hardening is complete:
 		• Check running services
 		• Review inbound/outbound firewall rules
