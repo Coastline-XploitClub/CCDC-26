@@ -58,15 +58,15 @@ printf "\n"
 printf "%s## 3. Open Ports (Listening) ##%s\n" "$YELLOW" "$NC"
 # Try ss (Socket Stats) - modern replacement
 if command -v ss > /dev/null 2>&1; then
-    printf "--> Using 'ss -tuln' (TCP/UDP Listening Numeric):\n"
-    ss -tuln
+    printf "--> Using 'ss -tulpn' (TCP/UDP Listening Numeric):\n"
+    ss -tulpn | grep -v 127.0.0
     printf "\n"
 fi
 
 # Try netstat - legacy tool, but often available
 if command -v netstat > /dev/null 2>&1; then
-    printf "--> Using 'netstat -tuln':\n"
-    netstat -tuln
+    printf "--> Using 'netstat -tulpn':\n"
+    netstat -tulpn | grep -v 127.0.0
     printf "\n"
 fi
 
