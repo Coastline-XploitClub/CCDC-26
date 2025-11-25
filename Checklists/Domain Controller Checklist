@@ -1,7 +1,7 @@
 # 🛡️ First 15 Minutes – Domain Controller Checklist (CCDC)
 
 This checklist outlines the actions to secure and stabilize the Domain Controller during the first 15 minutes of the competition.
----
+
 ## 1. Log in to the Domain Controller
 		• Use the default password provided by CCDC.
 		• Immediately change the Administrator password to the team-approved password.
@@ -9,7 +9,7 @@ This checklist outlines the actions to secure and stabilize the Domain Controlle
 		• Default password: OMGaTREX1?
 		• New team password: Lily-hen-seminar123?
 		• Update the PCRs if required
----
+
 ## 2. Initial Recon – Identify Open Ports
 	Run an Nmap scan from the Kali machine:
 	
