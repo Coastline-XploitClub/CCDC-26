@@ -1,7 +1,7 @@
 # 🛡️ First 15 Minutes – Domain Controller Checklist (CCDC)
 
 This checklist outlines the actions to secure and stabilize the Domain Controller during the first 15 minutes of the competition.
-
+---
 ## 1. Log in to the Domain Controller
 		• Use the default password provided by CCDC.
 		• Immediately change the Administrator password to the team-approved password.
@@ -9,6 +9,7 @@ This checklist outlines the actions to secure and stabilize the Domain Controlle
 		• Default password: OMGaTREX1?
 		• New team password: Lily-hen-seminar123?
 		• Update the PCRs if required
+---
 ## 2. Initial Recon – Identify Open Ports
 	Run an Nmap scan from the Kali machine:
 	
@@ -18,6 +19,7 @@ This checklist outlines the actions to secure and stabilize the Domain Controlle
 
 ## 3. Run the Full Domain Controller Backup. 
 		a. Execute Full_DC_Backup.ps1 to generate a full backup: https://github.com/Coastline-XploitClub/CCDC-26/blob/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/Full_DC_Backup.ps1
+
 ##4. Apply DNS Hardening
 		a. Run the DNS_Hardening.ps1 script.
 		b. Here is the url: https://github.com/Coastline-XploitClub/CCDC-26/blob/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/DNS_Hardening.ps1
@@ -30,15 +32,14 @@ This checklist outlines the actions to secure and stabilize the Domain Controlle
 				3. At the last screen, enable both options (required for Domain Controllers).
 				4. Refresh the zone. DNSSEC should now show as Enabled.
 		
-		![DNSSEC Step 1](./image.png)
-		d. Follow the wizard, everything is Next, and just click add to the keys.
-		e. The last part you need to check both option because is a domain controller. See the next image.
-		f. 
-		g. Just refresh and it will be enabled.
-		h. 
+		c. Follow the wizard, everything is Next, and just click add to the keys.
+		d. The last part you need to check both option because is a domain controller. See the next image. 
+		e. Just refresh and it will be enabled.
+
 ## 5. Apply Domain Firewall Hardening (Template Creation)
 		a. Run Firewall_Rules.ps1, which creates the Domain Hardening GPO automatically:
 		b. You can find the script by using the following url: https://github.com/Coastline-XploitClub/CCDC-26/blob/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/Firewall_Rules.ps1
+
 ## 6. Configure Logging for the Domain Hardening GPO 
 		After the GPO is created:
 			1. Open Group Policy Management.
