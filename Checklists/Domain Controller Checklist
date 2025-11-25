@@ -15,6 +15,7 @@ This checklist outlines the actions to secure and stabilize the Domain Controlle
 		b. Update the PCRs if it is required. 
 	• This rotates passwords for every domain user.
 	• Administrator uses the password you manually set earlier.
+
 ## 3. Initial Recon – Identify Open Ports
 	Run an Nmap scan from the Kali machine:
 	
