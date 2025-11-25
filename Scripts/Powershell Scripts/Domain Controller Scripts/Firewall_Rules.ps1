@@ -11,49 +11,124 @@ Write-Host "====================================================" -ForegroundCol
 
 
 # ==========================================================
-#  ASK FOR DOMAIN NAME (Dynamic)
+#  AUTO-DETECT DOMAIN & ALLOW MANUAL OVERRIDE WITH VALIDATION
 # ==========================================================
-$DomainName = Read-Host "Enter your domain name (example: great.cretaceous)"
-if (-not $DomainName) {
-    Write-Host "[ERROR] Domain cannot be empty." -ForegroundColor Red
-    exit
+
+# Try to auto-detect the domain
+try {
+    $AutoDomain = (Get-ADDomain).DNSRoot
+} catch {
+    Write-Host "[WARN] Unable to auto-detect domain. Machine may not be domain-joined." -ForegroundColor Yellow
+    $AutoDomain = $null
 }
 
+# If auto-detected, ask user to confirm
+if ($AutoDomain) {
+    Write-Host "`nDetected domain: $AutoDomain" -ForegroundColor Cyan
+    $choice = Read-Host "Use this domain? (Y/N)"
+
+    if ($choice.ToUpper() -eq "Y") {
+        $DomainName = $AutoDomain
+    }
+}
+
+# If auto-detect not used or user chose NO → ask manually
+if (-not $DomainName) {
+    $DomainName = Read-Host "Enter your domain name manually (example: great.cretaceous)"
+
+    if (-not $DomainName) {
+        Write-Host "[ERROR] Domain cannot be empty." -ForegroundColor Red
+        exit
+    }
+
+    # Validate domain exists in AD
+    try {
+        $null = Get-ADDomain -Identity $DomainName -ErrorAction Stop
+        Write-Host "[OK] Domain verified: $DomainName" -ForegroundColor Green
+    } catch {
+        Write-Host "[ERROR] Domain '$DomainName' does not exist or cannot be contacted." -ForegroundColor Red
+        exit
+    }
+}
+
+# Prepare GPO variables
 $GpoName     = "Domain Hardening"
 $PolicyStore = "$DomainName\$GpoName"
 
 Start-Sleep -Seconds 1
 
+
 # ==========================================================
-#  SECTION 0.1 – FIX DNS & ACTIVATE DOMAIN PROFILE (ASK FOR DC IP)
+#  SECTION 0.1 – FIX DNS & ACTIVATE DOMAIN PROFILE (AUTO-DETECT + VALIDATION)
 # ==========================================================
 Write-Host "`n[0.1] DNS Fix – Configure correct DNS for Domain Profile…" -ForegroundColor Yellow
 
-$DC_IP = Read-Host "Enter the Domain Controller IP address (example: 192.168.220.12)"
-
-if (-not $DC_IP) {
-    Write-Host "[ERROR] IP cannot be empty." -ForegroundColor Red
-    exit
+# Attempt to auto-detect the Domain Controller IP
+try {
+    $AutoDC_IP = (Get-ADDomainController -Discover -ErrorAction Stop).IPv4Address
+} catch {
+    Write-Host "[WARN] Unable to auto-detect the Domain Controller IP." -ForegroundColor Yellow
+    $AutoDC_IP = $null
 }
 
-# Apply DNS servers
+# If auto-detected, ask for confirmation
+if ($AutoDC_IP) {
+    Write-Host "`nDetected Domain Controller IP: $AutoDC_IP" -ForegroundColor Cyan
+    $choice = Read-Host "Use this IP? (Y/N)"
+
+    if ($choice.ToUpper() -eq "Y") {
+        $DC_IP = $AutoDC_IP
+    }
+}
+
+# If user declined or auto-detect failed → manual entry
+if (-not $DC_IP) {
+
+    $DC_IP = Read-Host "Enter the Domain Controller IP address (example: 192.168.220.12)"
+
+    if (-not $DC_IP) {
+        Write-Host "[ERROR] IP cannot be empty." -ForegroundColor Red
+        exit
+    }
+
+    # Validate the IP format using regex
+    if ($DC_IP -notmatch '^([0-9]{1,3}\.){3}[0-9]{1,3}$') {
+        Write-Host "[ERROR] Invalid IP address format." -ForegroundColor Red
+        exit
+    }
+
+    # Validate the IP is reachable (ping test)
+    if (-not (Test-Connection -Count 1 -Quiet $DC_IP)) {
+        Write-Host "[ERROR] IP $DC_IP is not reachable on the network." -ForegroundColor Red
+        exit
+    }
+
+    # Validate LDAP is responding (389)
+    $test = Test-NetConnection -ComputerName $DC_IP -Port 389
+    if (-not $test.TcpTestSucceeded) {
+        Write-Host "[ERROR] IP exists but LDAP port 389 is NOT responding." -ForegroundColor Red
+        exit
+    }
+
+    Write-Host "[OK] Domain Controller validated successfully." -ForegroundColor Green
+}
+
+# APPLY DNS SETTINGS
 Write-Host "  → Setting DNS servers to: $DC_IP and 127.0.0.1" -ForegroundColor Cyan
 Set-DnsClientServerAddress -InterfaceAlias "Ethernet 2" -ServerAddresses ($DC_IP, "127.0.0.1")
 
-# Apply DNS suffix
 Write-Host "  → Applying DNS suffix: $DomainName" -ForegroundColor Cyan
 Set-DnsClient -InterfaceAlias "Ethernet 2" -ConnectionSpecificSuffix $DomainName
 
-# DNS cleanup & registration
+# Cleanup DNS
 ipconfig /flushdns    | Out-Null
 ipconfig /registerdns | Out-Null
 
-# Restart NLA
+# Restart NLA service
 Restart-Service nlasvc -Force
-
 Start-Sleep 2
 
-# Check profile
+# Check firewall profile
 $profile = (Get-NetConnectionProfile).NetworkCategory
 Write-Host "  → Active Firewall Profile Detected: $profile" -ForegroundColor Green
 
@@ -62,6 +137,7 @@ if ($profile -ne "DomainAuthenticated") {
 } else {
     Write-Host "[OK] Domain profile active." -ForegroundColor Green
 }
+
 
 # ==========================================================
 #  SECTION 0 – CREATE GPO + LINK + PRIORITY
@@ -134,6 +210,42 @@ foreach ($p in $Profiles) {
 
 Write-Host "[OK] Domain + Private firewall profiles configured." -ForegroundColor Green
 
+# ==========================================================
+#  SECTION 0.65 – CLEANUP ANY BROKEN FIREWALL LOGGING KEYS
+#  (Prevents MMC WFAS Snap-In Crash on Server 2016)
+# ==========================================================
+Write-Host "`n[0.65] Cleaning leftover Firewall Logging keys..." -ForegroundColor Yellow
+
+$Paths = @(
+    "HKLM\Software\Policies\Microsoft\WindowsFirewall\DomainProfile\Logging",
+    "HKLM\Software\Policies\Microsoft\WindowsFirewall\PrivateProfile\Logging"
+)
+
+foreach ($path in $Paths) {
+    Remove-GPRegistryValue -Name $GpoName -Key $path -ValueName "LogDroppedPackets" -ErrorAction SilentlyContinue
+    Remove-GPRegistryValue -Name $GpoName -Key $path -ValueName "LogSuccessfulConnections" -ErrorAction SilentlyContinue
+    Remove-GPRegistryValue -Name $GpoName -Key $path -ValueName "LogFileName" -ErrorAction SilentlyContinue
+    Remove-GPRegistryValue -Name $GpoName -Key $path -ValueName "LogFileSize" -ErrorAction SilentlyContinue
+}
+
+Write-Host "[OK] Firewall logging registry cleanup complete — MMC crash prevented." -ForegroundColor Green
+
+# ==========================================================
+#  SECTION 0.7 – ENABLE LOCAL FIREWALL LOGGING (SAFE, NO GPO)
+# ==========================================================
+Write-Host "`n[0.7] Enabling Local Firewall Logging (safe mode)..." -ForegroundColor Yellow
+
+# Enable logging of dropped packets
+netsh advfirewall set currentprofile logging droppedconnections enable | Out-Null
+
+# Enable logging of allowed connections
+netsh advfirewall set currentprofile logging allowedconnections enable | Out-Null
+
+Write-Host "[OK] Local Firewall Logging Enabled (No GPO → No MMC crash)" -ForegroundColor Green
+
+# Show active logging configuration
+netsh advfirewall firewall show logging
+
 
 # ==========================================================
 #  SECTION 1 – VARIABLES
@@ -191,6 +303,7 @@ foreach ($p in $NetworkPortsUDP) {
 
 Write-Host "[OK] Network-Level Kerberos/LDAP rules applied." -ForegroundColor Green
 
+
 # ==========================================================
 #  SECTION 2.5 – GLOBAL RDP ACCESS (SAFE FOR COMPETITIONS)
 # ==========================================================
@@ -218,6 +331,52 @@ New-NetFirewallRule `
 
 Write-Host "[OK] Global RDP Rules Applied (3389 TCP/UDP)" -ForegroundColor Green
 
+# ==========================================================
+#  SECTION 2.8 – ALLOW NTP (UDP 123) FOR TIME SYNC
+# ==========================================================
+Write-Host "`n[2.8] Applying NTP (UDP 123) Time Synchronization Rule..." -ForegroundColor Yellow
+
+New-NetFirewallRule `
+    -DisplayName "Allow NTP UDP 123 (Time Sync for Clients)" `
+    -Direction Inbound `
+    -Protocol UDP `
+    -LocalPort 123 `
+    -RemoteAddress $NetworkScope `
+    -Action Allow `
+    -Profile Domain `
+    -PolicyStore $PolicyStore `
+    -ErrorAction SilentlyContinue | Out-Null
+
+Write-Host "[OK] NTP Rule Applied (UDP 123)" -ForegroundColor Green
+# ==========================================================
+#  SECTION 2.9 – ALLOW ICMP (PING) FOR SCORE ENGINE + HEALTH CHECKS
+# ==========================================================
+
+Write-Host "`n[2.9] Applying ICMP Allow Rule (Ping)..." -ForegroundColor Yellow
+
+New-NetFirewallRule `
+    -DisplayName "Allow ICMPv4 Echo Request (Ping)" `
+    -Direction Inbound `
+    -Protocol ICMPv4 `
+    -IcmpType 8 `
+    -RemoteAddress $NetworkScope `
+    -Action Allow `
+    -Profile Domain `
+    -PolicyStore $PolicyStore `
+    -ErrorAction SilentlyContinue | Out-Null
+
+New-NetFirewallRule `
+    -DisplayName "Allow ICMPv4 Echo Reply (Ping)" `
+    -Direction Inbound `
+    -Protocol ICMPv4 `
+    -IcmpType 0 `
+    -RemoteAddress $NetworkScope `
+    -Action Allow `
+    -Profile Domain `
+    -PolicyStore $PolicyStore `
+    -ErrorAction SilentlyContinue | Out-Null
+
+Write-Host "[OK] ICMP Rules Applied (Ping Request + Reply)" -ForegroundColor Green
 
 # ==========================================================
 #  SECTION 3 – MACHINE-SPECIFIC RULES
@@ -281,3 +440,17 @@ Write-Host "• Kerberos/LDAP Rules Applied ........ OK" -ForegroundColor Green
 Write-Host "• Machine-Specific Rules Applied ..... OK" -ForegroundColor Green
 
 Write-Host "`n🔥 COMPLETE – DOMAIN HARDENING WITH GPO AUTO-CONFIG 🔥" -ForegroundColor Yellow
+
+# ==========================================================
+#  APPLY ALL CHANGES (GPO + Firewall + LDAP + Kerberos)
+# ==========================================================
+Write-Host "`n[+] Applying all GPO changes with gpupdate /force..." -ForegroundColor Cyan
+
+try {
+    gpupdate /force
+    Write-Host "[✔] GPUPDATE completed successfully." -ForegroundColor Green
+} catch {
+    Write-Host "[✖] GPUPDATE failed! Run gpupdate manually." -ForegroundColor Red
+}
+
+Write-Host "`n🎯 All hardening settings are now active!" -ForegroundColor Yellow
