@@ -128,6 +128,14 @@ Set-GPRegistryValue -Name $GpoName `
     -Key "HKLM\System\CurrentControlSet\Services\LanmanWorkstation\Parameters" `
     -ValueName "RequireSecuritySignature" -Type DWord -Value 1
 
+# Enforce SMB Server Signing
+Write-Host "`n[4.1b] Enforcing SMB Server Signing..." -ForegroundColor Cyan
+
+Set-GPRegistryValue -Name $GpoName `
+    -Key "HKLM\System\CurrentControlSet\Services\LanmanServer\Parameters" `
+    -ValueName "RequireSecuritySignature" -Type DWord -Value 1
+
+
 
 # =============================================================
 # Disable LLMNR
@@ -250,3 +258,4 @@ Write-Host "  → GPO linked to: $OU_Windows" -ForegroundColor Green
 gpupdate /force
 
 Write-Host "`n[✔] Completed! OUs created, computers sorted, GPO created, firewall settings applied, GPO linked, and gpupdate executed." -ForegroundColor Green
+
