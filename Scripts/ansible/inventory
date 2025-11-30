@@ -17,11 +17,10 @@ hephaestus ansible_host=192.168.1.2
 cerebrum ansible_host=192.168.1.109
 hera ansible_host=192.168.1.111
 zeus ansible_host=192.168.1.103
-hermes ansible_host=192.168.1.5
 
 [linux] # Configured boxes
 # eddieneddy ansible_host=192.168.220.13
-
+hermes ansible_host=192.168.1.5
 
 ###############
 ## VARIABLES ##
@@ -29,11 +28,11 @@ hermes ansible_host=192.168.1.5
 
 [vanilla_linux_ssh:vars]
 ansible_user=root
-ansible_password=OMGaTREX1?
+ansible_password=FixTheBrain123!
 
 [vanilla_linux:vars]
 ansible_user=root
-ansible_password=OMGaTREX1?
+ansible_password=FixTheBrain123!
 
 [linux:vars]
 ansible_user=ccdcadmin
