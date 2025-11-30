@@ -191,4 +191,8 @@ printf "\n"
 
 printf "%s==================================================%s\n" "$GREEN" "$NC"
 printf "%s               Enumeration Complete               %s\n" "$GREEN" "$NC"
+# Another root user check
+if [ "$(id -u)" -ne 0 ]; then
+  printf "%sWARNING: NOT RUNNING AS ROOT. THIS SCRIPT SHOULD BE RUN AS ROOT!%s\n" "$RED" "$NC"
+fi
 printf "%s==================================================%s\n" "$GREEN" "$NC"
