@@ -20,6 +20,13 @@ else
   NC=""
 fi
 
+# Check if user is root
+if [ "$(id -u)" -ne 0 ]; then
+  printf "%s====================WARNING=====================%s\n" "$RED" "$NC"
+  printf "%sNOT RUNNING AS ROOT. THIS SCRIPT SHOULD BE RUN AS ROOT!%s\n" "$RED" "$NC"
+  printf "%s================================================%s\n" "$RED" "$NC"
+fi
+
 printf "%s==================================================%s\n" "$GREEN" "$NC"
 printf "%s           Basic System Enumeration               %s\n" "$GREEN" "$NC"
 printf "%s==================================================%s\n" "$GREEN" "$NC"
