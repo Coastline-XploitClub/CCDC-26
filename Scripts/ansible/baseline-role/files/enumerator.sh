@@ -22,9 +22,9 @@ fi
 
 # Check if user is root
 if [ "$(id -u)" -ne 0 ]; then
-  printf "%s====================WARNING=====================%s\n" "$RED" "$NC"
+  printf "%s=====================WARNING======================%s\n" "$RED" "$NC"
   printf "%sNOT RUNNING AS ROOT. THIS SCRIPT SHOULD BE RUN AS ROOT!%s\n" "$RED" "$NC"
-  printf "%s================================================%s\n" "$RED" "$NC"
+  printf "%s==================================================%s\n" "$RED" "$NC"
 fi
 
 printf "%s==================================================%s\n" "$GREEN" "$NC"
@@ -182,6 +182,8 @@ else
     printf "No standard tools found to list logged in users.\n"
 fi
 printf "\n"
+printf "Failsafe method to list sessions using /dev/pts/ if above doesn't work\n"
+ls -l /dev/pts/ | grep -E '^[c]' | awk '{print "User: " $3 " (TTY: pts/" $NF ")"}'
 
 # --- 11. Environment Variables ---
 printf "%s## 11. Environment Variables ##%s\n" "$YELLOW" "$NC"
