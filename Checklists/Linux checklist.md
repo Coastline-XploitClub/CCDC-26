@@ -22,8 +22,8 @@ passwd <username>
 # Change root password
 passwd root
 ```
-- [ ] Record initial host state: hostname, IPs, services, and abnormalities
-> 👉 can use `linux_enumerator.sh` for this!
+- [ ] Record initial host state: hostname, IPs, services, and abnormalities (dump info in team spreadsheet if not already filled)
+> ✅ can use `enumerator.sh` for this!
 ```bash
 # Get hostname
 hostname
@@ -48,8 +48,8 @@ systemctl --type=service --state=running
 - Navigate to the IP of your box with the ports in a browser to investigate the web apps
 
 👁️‍🗨️ Document:
-  - Service name and port
-  - Administrative default creds
+  - Service name and port (reference `systemctl` or `ps aux`)
+  - Administrative default creds (combination of Googling and default competition creds)
 ✏️ Change:
   - Adminsitrative default creds
 👁️‍🗨️ Document:
@@ -94,6 +94,20 @@ redis-cli SAVE
 cp /var/lib/redis/dump.rdb ./redis_backup.rdb
 
 ```
+- [ ] Stop any obvious unnecessary services. Ensure scored services remain up on scoring engine.
+```bash
+# Stop/disabling service (systemd)
+systemctl stop <service>
+systemctl disable <service>
+
+# Stop service (SysV Init)
+service <service> stop
+update-rc.d <service-name> disable
+
+# Stop service (Alpine)
+rc-service <service> stop
+rc-update del <service> default
+```
 - [ ] Evaluate common vulnerabilities (anonymous login, critical/high CVEs, exposed filesystems in file shares, etc.)
 
 - Check version of service running, and cross-check with release notes (look for security patches in later updates), or search for CVEs for service.
@@ -107,7 +121,7 @@ tcpdump -i <interface> tcp and src net 192.168.220.0/24 and port <PORT>
 ```
 
 - [ ] List adminsitrative users
-> 👉 can use `linux_enumerator.sh` for this!
+> ✅ can use `enumerator.sh` for this!
 ```bash
 # Check /etc/sudoers and /etc/sudoers.d/*
 cat /etc/sudoers
@@ -126,7 +140,7 @@ cat /etc/sudoers.d/*
 - [ ] Review and remove sketchy access (sudo, Administrators)
 ```bash
 # One-liner SSH audit
-for u in /home/* /root; do echo "=== $u/.ssh ==="; grep -R --line-number -E "id_rsa|id_ed25519|-----BEGIN.*PRIVATE KEY|ssh-ed25519|ssh-rsa|authorized_keys|Host|IdentityFile|User|Port" "$u/.ssh" 2>/dev/null; find "$u" -type s -name "agent.*" 2>/dev/null; done; echo "=== /etc/ssh/sshd_config ==="; grep -R --line-number -E "PermitRootLogin|PasswordAuthentication|PubkeyAuthentication" /etc/ssh/sshd_config 2>/dev/null; echo "=== /etc/ssh/ssh_config ==="; grep -R --line-number -E "Host|IdentityFile" /etc/ssh/ssh_config 2>/dev/null
+for u in /home/* /root; do echo "=== $u/.ssh ==="; grep -R --line-number -E "id_rsa|id_ed25519|-----BEGIN.*PRIVATE KEY|ssh-ed25519|ssh-rsa|authorized_keys|Host|IdentityFile|User|Port" "$u" 2>/dev/null; find "$u" -type s -name "agent.*" 2>/dev/null; done; echo "=== /etc/ssh/sshd_config ==="; grep -R --line-number -E "PermitRootLogin|PasswordAuthentication|PubkeyAuthentication" /etc/ssh/sshd_config 2>/dev/null; echo "=== /etc/ssh/ssh_config ==="; grep -R --line-number -E "Host|IdentityFile" /etc/ssh/ssh_config 2>/dev/null
 ```
 
 ### **3 Hardening**
