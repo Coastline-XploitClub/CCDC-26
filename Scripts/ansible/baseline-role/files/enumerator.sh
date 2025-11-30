@@ -192,6 +192,14 @@ printf "%s## 11. Environment Variables ##%s\n" "$YELLOW" "$NC"
 env
 printf "\n"
 
+printf "%s## 12. Private Encryption Key Files ##%s\n" "$YELLOW" "$NC"
+# Searches filesystem for private keyfiles. Should find most SSH keys on system.
+find /root /home /etc /opt /mnt /srv /var /tmp -type f \( -name "id_*" -o -name "*.pem" -o -name "*.key" \) ! -name "*.pub" 2>/dev/null | \
+while read -r path; do
+  head -1 "$path" 2>/dev/null | grep -q -- '-----BEGIN.*PRIVATE KEY-----' && echo "$path"
+done
+printf "\n"
+
 printf "%s==================================================%s\n" "$GREEN" "$NC"
 printf "%s               Enumeration Complete               %s\n" "$GREEN" "$NC"
 # Another root user check
