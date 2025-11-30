@@ -15,20 +15,37 @@
 > ℹ️ Be able to answer "what does your box do?"
 
 - [ ] Change root password for system (`root` never scored)
-```
+```bash
+# Change any users password
+passwd <username>
+
+# Change root password
 passwd root
 ```
 - [ ] Record initial host state: hostname, IPs, services, and abnormalities
 > 👉 can use `linux_enumerator.sh` for this!
-```
-hostname, ip a
-ss -tulnp or netstat -tunalp
+```bash
+# Get hostname
+hostname
+
+# Get ip address(es)
+ip a
+ifconfig
+
+# Check open ports
+## Option 1:
+ss -tulnp
+## Option 2:
+netstat -tunalp
+
+# Get running services
 systemctl --type=service --state=running
 ```
 - [ ] Enumeration/understanding of web services and services running (what is their purpose? What does it do? Is it necessary? Can it be abused?)
-```
-For web services, run netstat -tunalp and look for ports like 80 443 8080 9000 and common web ports.
-Then! Navigate to the IP of your box with the ports in a browser to investigate the web apps
+
+## Service Inspection
+- For web services, run netstat -tunalp and look for ports like 80 443 8080 9000 and common web ports.
+- Navigate to the IP of your box with the ports in a browser to investigate the web apps
 
 👁️‍🗨️ Document:
   - Service name and port
@@ -40,41 +57,62 @@ Then! Navigate to the IP of your box with the ports in a browser to investigate 
   - If sensitive data/PII stored and where
   - If anonymous/no-password login
   - Are there domain accounts?
-```
+
 - [ ] IF you have a docker container, enumerate the container info
-```
+```bash
+# Get list of running containers
 docker ps
+
+# Get additional information about any container
 docker inspect <container ID>
 
-To find yaml (or .yml) files for docker compose:
-find / -iname *.yaml
+# Search for yaml (or .yml) files for docker compose:
+find / \( -iname "*.yaml" -o -iname "*.yml" \)
 
-Examine docker compose, back up compose file and any volumes. You can tar bind mounts (directories) directly, or use the following command:
+# Backup docker volumes
 docker run --rm --volumes-from <CONTAINER NAME> -v $(pwd):/backup ubuntu tar cvf /backup/backup.tar /<VOLUME_NAME>
 ```
 - [ ] Backups of all default configuration files and databases
-```
+```bash
+#  Backup a folder
 tar -cvf archive.tar /path/to/directory
-Check /opt, /etc, /var, home directories
-mysqldump for mysql databases
+
+# We want to check /opt, /etc, /var, home directories
+
+# Backup databases
+## MySQL
+mysqldump -u root -p --all-databases > mysql_backup.sql
+
+## Postgres
+pg_dumpall -U postgres > postgres_backup.sql
+
+## MongoDB
+mongodump --out /path/to/backup/
+
+## Redis
+redis-cli SAVE
+cp /var/lib/redis/dump.rdb ./redis_backup.rdb
+
 ```
 - [ ] Evaluate common vulnerabilities (anonymous login, critical/high CVEs, exposed filesystems in file shares, etc.)
-```
-Check version of service running, and cross-check with release notes (look for security patches in later updates), or search for CVEs for service.
-Take a note if you have to update the service to patch, or if there are any mitigations available that don't require updating.
-```
+
+- Check version of service running, and cross-check with release notes (look for security patches in later updates), or search for CVEs for service.
+- Take a note if you have to update the service to patch, or if there are any mitigations available that don't require updating.
+
 - [ ] Find out if any other boxes rely upon a scored service
-```
-Look in service's access logs (ex. web server logs), or run a tcpdump to listen on a port
+
+- Look in service's access logs (ex. web server logs), or run a tcpdump to listen on a port
+```bash
 tcpdump -i <interface> tcp and src net 192.168.220.0/24 and port <PORT> 
 ```
+
 - [ ] List adminsitrative users
 > 👉 can use `linux_enumerator.sh` for this!
+```bash
+# Check /etc/sudoers and /etc/sudoers.d/*
+cat /etc/sudoers
+cat /etc/sudoers.d/*
 ```
-Check /etc/sudoers and /etc/sudoers.d/*
-```
-
----
 
 > ⚠️ START DOCUMENTING ANY CHANGES MADE FROM THIS POINT ON!
 
@@ -86,12 +124,10 @@ Check /etc/sudoers and /etc/sudoers.d/*
 - [ ] Apply strong password and lockout policies
 - [ ] Change passwords for other privileged user accounts, tokens, etc. (submit PCRs where necessary)
 - [ ] Review and remove sketchy access (sudo, Administrators)
+```bash
+# One-liner SSH audit
+for u in /home/* /root; do echo "=== $u/.ssh ==="; grep -R --line-number -E "id_rsa|id_ed25519|-----BEGIN.*PRIVATE KEY|ssh-ed25519|ssh-rsa|authorized_keys|Host|IdentityFile|User|Port" "$u/.ssh" 2>/dev/null; find "$u" -type s -name "agent.*" 2>/dev/null; done; echo "=== /etc/ssh/sshd_config ==="; grep -R --line-number -E "PermitRootLogin|PasswordAuthentication|PubkeyAuthentication" /etc/ssh/sshd_config 2>/dev/null; echo "=== /etc/ssh/ssh_config ==="; grep -R --line-number -E "Host|IdentityFile" /etc/ssh/ssh_config 2>/dev/null
 ```
-Check for keys stored under ~/.ssh for each user
-grep -R --line-number -E <phrase> <directories>
-```
-
----
 
 ### **3 Hardening**
 
