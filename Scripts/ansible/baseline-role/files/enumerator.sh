@@ -108,7 +108,19 @@ printf "\n"
 # --- 6. Users with Login Shells ---
 printf "%s## 6. Users with Valid Shells ##%s\n" "$YELLOW" "$NC"
 # Filter out nologin/false shells to find actual humans or service accounts
-grep -E "/bin/bash|/bin/sh|/bin/zsh" /etc/passwd | awk -F: '{printf "%-15s UID:%s Shell:%s\n", $1, $3, $7}'
+if [ -f /etc/shells ]; then
+    # Build regex from /etc/shells: remove comments/empty lines, replace newline with pipe
+    shell_regex=$(grep -Ev '^#|^$' /etc/shells | tr '\n' '|' | sed 's/|$//')
+else
+    shell_regex=""
+fi
+
+# Fallback to common shells if /etc/shells is missing or empty
+if [ -z "$shell_regex" ]; then
+    shell_regex="/bin/bash|/bin/sh|/bin/zsh|/bin/ash|/bin/tcsh|/bin/ksh"
+fi
+
+grep -E "$shell_regex" /etc/passwd | awk -F: '{printf "%-15s UID:%s Shell:%s\n", $1, $3, $7}'
 printf "\n"
 
 # --- 7. Empty Password Fields ---
