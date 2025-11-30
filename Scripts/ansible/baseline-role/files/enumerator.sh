@@ -118,10 +118,28 @@ fi
 printf "\n"
 
 # --- 8. Sudoers Configuration ---
-printf "%s## 8. Sudoers Configuration (NOPASSWD Check) ##%s\n" "$YELLOW" "$NC"
-# Looking for risky NOPASSWD entries
+printf "%s## 8. Sudoers Configuration ##%s\n" "$YELLOW" "$NC"
 if [ -r /etc/sudoers ]; then
+    printf "--> Entries with 'NOPASSWD' (Risky):\n"
+    # Grep recursively in /etc/sudoers and the .d directory
     grep -r "NOPASSWD" /etc/sudoers /etc/sudoers.d/ 2>/dev/null
+    if [ $? -ne 0 ]; then
+        printf "None found.\n"
+    fi
+    printf "\n"
+
+    # Consolidate all sudoers file content for parsing
+    # Use find to safely cat existing files in both locations
+    sudo_content=$(find /etc/sudoers /etc/sudoers.d -type f -exec cat {} + 2>/dev/null)
+
+    printf "--> Users with 'ALL' Privileges:\n"
+    # Regex: Start of line, optional space, username, space, ALL
+    printf "%s\n" "$sudo_content" | grep -E '^\s*[a-zA-Z0-9_-]+\s+ALL' | awk '{print $1}' | sort -u
+    printf "\n"
+
+    printf "--> Groups with 'ALL' Privileges:\n"
+    # Regex: Start of line, optional space, %groupname, space, ALL
+    printf "%s\n" "$sudo_content" | grep -E '^\s*%[a-zA-Z0-9_-]+\s+ALL' | awk '{print $1}' | sed 's/%//' | sort -u
 else
     printf "%sCannot read /etc/sudoers (Run as root).%s\n" "$RED" "$NC"
 fi
@@ -145,7 +163,7 @@ printf "\n"
 
 # --- 10. Currently Logged In Users ---
 printf "%s## 10. Currently Logged In ##%s\n" "$YELLOW" "$NC"
-
+w
 printf "\n"
 
 # --- 11. Environment Variables ---
