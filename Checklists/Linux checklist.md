@@ -23,7 +23,7 @@ passwd <username>
 passwd root
 ```
 - [ ] Record initial host state: hostname, IPs, services, and abnormalities (dump info in team spreadsheet if not already filled)
-> ✅ can use `enumerator.sh` for this!
+> ✅ can use `enumerator.sh` for this! https://github.com/Coastline-XploitClub/CCDC-26/blob/6001824dd56db71ed9d314ffadd6cbb01649f5a1/Scripts/ansible/baseline-role/files/enumerator.sh
 ```bash
 # Get hostname
 hostname
