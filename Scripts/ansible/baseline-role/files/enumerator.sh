@@ -163,7 +163,17 @@ printf "\n"
 
 # --- 10. Currently Logged In Users ---
 printf "%s## 10. Currently Logged In ##%s\n" "$YELLOW" "$NC"
-w
+if command -v w > /dev/null 2>&1; then
+    w
+elif command -v who > /dev/null 2>&1; then
+    printf "--> Using 'who' (w command not found):\n"
+    who -a
+elif command -v users > /dev/null 2>&1; then
+    printf "--> Using 'users' (w/who commands not found):\n"
+    users
+else
+    printf "No standard tools found to list logged in users.\n"
+fi
 printf "\n"
 
 # --- 11. Environment Variables ---
