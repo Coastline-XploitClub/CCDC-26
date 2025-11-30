@@ -184,6 +184,7 @@ fi
 printf "\n"
 printf "Failsafe method to list sessions using /dev/pts/ if above doesn't work\n"
 ls -l /dev/pts/ | grep -E '^[c]' | awk '{print "User: " $3 " (TTY: pts/" $NF ")"}'
+printf "\n"
 
 # --- 11. Environment Variables ---
 printf "%s## 11. Environment Variables ##%s\n" "$YELLOW" "$NC"
