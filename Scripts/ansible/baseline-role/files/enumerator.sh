@@ -65,14 +65,14 @@ printf "\n"
 printf "%s## 3. Open Ports (Listening) ##%s\n" "$YELLOW" "$NC"
 # Try ss (Socket Stats) - modern replacement
 if command -v ss > /dev/null 2>&1; then
-    printf "--> Using 'ss -tulpn' (TCP/UDP Listening Numeric):\n"
+    printf "==> Using 'ss -tulpn' (TCP/UDP Listening Numeric):\n"
     ss -tulpn | grep -v 127.0.0
     printf "\n"
 fi
 
 # Try netstat - legacy tool, but often available
 if command -v netstat > /dev/null 2>&1; then
-    printf "--> Using 'netstat -tulpn':\n"
+    printf "==> Using 'netstat -tulpn':\n"
     netstat -tulpn | grep -v 127.0.0
     printf "\n"
 fi
@@ -85,13 +85,13 @@ printf "\n"
 # --- 4. Running Services ---
 printf "%s## 4. Running Services ##%s\n" "$YELLOW" "$NC"
 if command -v systemctl > /dev/null 2>&1; then
-    printf "--> Systemd detected (Active Services):\n"
+    printf "==> Systemd detected (Active Services):\n"
     systemctl list-units --type=service --state=running --no-pager
 elif command -v rc-status > /dev/null 2>&1; then
-    printf "--> OpenRC detected (rc-status):\n"
+    printf "==> OpenRC detected (rc-status):\n"
     rc-status
 elif command -v service > /dev/null 2>&1; then
-    printf "--> SysVinit detected (service --status-all):\n"
+    printf "==> SysVinit detected (service --status-all):\n"
     # Filter for running services (+) usually denoted by [ + ]
     service --status-all 2>/dev/null | grep '+'
 else
@@ -139,7 +139,7 @@ printf "\n"
 # --- 8. Sudoers Configuration ---
 printf "%s## 8. Sudoers Configuration ##%s\n" "$YELLOW" "$NC"
 if [ -r /etc/sudoers ]; then
-    printf "--> Entries with 'NOPASSWD' (Risky):\n"
+    printf "==> Entries with 'NOPASSWD' (Risky):\n"
     # Grep recursively in /etc/sudoers and the .d directory
     grep -r "NOPASSWD" /etc/sudoers /etc/sudoers.d/ 2>/dev/null
     if [ $? -ne 0 ]; then
@@ -151,12 +151,12 @@ if [ -r /etc/sudoers ]; then
     # Use find to safely cat existing files in both locations
     sudo_content=$(find /etc/sudoers /etc/sudoers.d -type f -exec cat {} + 2>/dev/null)
 
-    printf "--> Users with 'ALL' Privileges:\n"
+    printf "==> Users with 'ALL' Privileges:\n"
     # Regex: Start of line, optional space, username, space, ALL
     printf "%s\n" "$sudo_content" | grep -E '^\s*[a-zA-Z0-9_-]+\s+ALL' | awk '{print $1}' | sort -u
     printf "\n"
 
-    printf "--> Groups with 'ALL' Privileges:\n"
+    printf "==> Groups with 'ALL' Privileges:\n"
     # Regex: Start of line, optional space, %groupname, space, ALL
     printf "%s\n" "$sudo_content" | grep -E '^\s*%[a-zA-Z0-9_-]+\s+ALL' | awk '{print $1}' | sed 's/%//' | sort -u
 else
@@ -185,10 +185,10 @@ printf "%s## 10. Currently Logged In ##%s\n" "$YELLOW" "$NC"
 if command -v w > /dev/null 2>&1; then
     w
 elif command -v who > /dev/null 2>&1; then
-    printf "--> Using 'who' (w command not found):\n"
+    printf "==> Using 'who' (w command not found):\n"
     who -a
 elif command -v users > /dev/null 2>&1; then
-    printf "--> Using 'users' (w/who commands not found):\n"
+    printf "==> Using 'users' (w/who commands not found):\n"
     users
 else
     printf "No standard tools found to list logged in users.\n"
