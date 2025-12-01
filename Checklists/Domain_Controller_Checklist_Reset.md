@@ -37,16 +37,8 @@ Immediately change the Administrator password to the secure team password.
   
   Administrator retains the password you manually set
 
-## 3. Initial Recon – Identify Services Before Hardening
 
-  From Kali:
-  
-    sudo nmap 192.168.220.12
-    
-    This confirms the baseline service exposure before applying firewall or GPO changes.
-
-
-## 4. Apply Firewall_Rules.ps1 (Enables GPOs + Locks Down Services)
+## 3. Apply Firewall_Rules.ps1 (Enables GPOs + Locks Down Services)
 Download
 
     Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Coastline-XploitClub/CCDC-26/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/Firewall_Rules.ps1" -OutFile "Firewall_Rules.ps1"
@@ -64,7 +56,7 @@ Download
   
  
 
-## 4A. DNS Hardening (Manual Steps)
+## 3A. DNS Hardening (Manual Steps)
   a. Fix DNS ACL
 
     Open DNS Manager
@@ -93,7 +85,7 @@ c. Enable DNSSEC
   
   Confirm DNSSEC shows as Enabled
 
-## 5. Configure Logging inside the Domain Hardening GPO
+## 4. Configure Logging inside the Domain Hardening GPO
 
   Open Group Policy Management
   
@@ -109,7 +101,7 @@ c. Enable DNSSEC
 
   Enable all categories required by your logging guide.
 
-## 6. Run BlueShield.ps1 (Full Hardening)
+## 5. Run BlueShield.ps1 (Full Hardening)
   Download
   
     Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Coastline-XploitClub/CCDC-26/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/BlueShield.ps1" -OutFile "BlueShield.ps1"
@@ -123,7 +115,7 @@ c. Enable DNSSEC
   
   Do NOT disable IPv6 or LDAP unless absolutely required
 
-## 7. Post-Hardening Enumeration
+## 6. Post-Hardening Enumeration
 
   After hardening:
   
