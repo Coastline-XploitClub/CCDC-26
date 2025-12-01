@@ -57,7 +57,7 @@ Download
   
   Applies port restrictions
   
-  Automatically adds Score Engine IP if needed
+ 
 
 ## 4A. DNS Hardening (Manual Steps)
   a. Fix DNS ACL
