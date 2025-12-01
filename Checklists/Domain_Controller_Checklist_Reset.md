@@ -40,6 +40,7 @@ Immediately change the Administrator password to the secure team password.
 ## 3. Initial Recon – Identify Services Before Hardening
 
   From Kali:
+  
     sudo nmap 192.168.220.12
     
     This confirms the baseline service exposure before applying firewall or GPO changes.
