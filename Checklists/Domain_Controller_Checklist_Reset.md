@@ -114,7 +114,7 @@ c. Enable DNSSEC
 
   Follow secure defaults
   
-  Do NOT disable IPv6 unless absolutely required
+  Do NOT disable IPv6 and LDAP unless absolutely required
 
 ## 7. Post-Hardening Enumeration
 
