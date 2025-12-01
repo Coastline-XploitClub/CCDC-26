@@ -21,10 +21,12 @@ Immediately change the Administrator password to the secure team password.
   Run this immediately after changing Administrator’s password.
 
   Download
-  Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Coastline-XploitClub/CCDC-26/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/Change-All-Passwords.ps1" -OutFile "Change-All-Passwords.ps1"
+ 
+    Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Coastline-XploitClub/CCDC-26/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/Change-All-Passwords.ps1" -OutFile "Change-All-Passwords.ps1"
 
   Run
-  .\Change-All-Passwords.ps1
+  
+    .\Change-All-Passwords.ps1
 
 
   Purpose:
@@ -45,10 +47,12 @@ Immediately change the Administrator password to the secure team password.
 
 ## 4. Apply Firewall_Rules.ps1 (Enables GPOs + Locks Down Services)
 Download
-  Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Coastline-XploitClub/CCDC-26/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/Firewall_Rules.ps1" -OutFile "Firewall_Rules.ps1"
+
+    Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Coastline-XploitClub/CCDC-26/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/Firewall_Rules.ps1" -OutFile "Firewall_Rules.ps1"
   
   Run
-  .\Firewall_Rules.ps1
+  
+    .\Firewall_Rules.ps1
 
 
   This:
@@ -106,10 +110,12 @@ c. Enable DNSSEC
 
 ## 6. Run BlueShield.ps1 (Full Hardening)
   Download
+  
     Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Coastline-XploitClub/CCDC-26/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/BlueShield.ps1" -OutFile "BlueShield.ps1"
   
   Run
-  .\BlueShield.ps1
+  
+    .\BlueShield.ps1
 
 
   Follow secure defaults
