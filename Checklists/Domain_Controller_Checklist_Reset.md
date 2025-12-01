@@ -1,4 +1,4 @@
-### 🛡️ First 15 Minutes – Domain Controller Checklist (Domain Reset Scenario)
+## 🛡️ First 15 Minutes – Domain Controller Checklist (Domain Reset Scenario)
 
 This version is used when the domain has been fully reset or rebuilt, requiring full stabilization, password changes, and a complete backup.
 
