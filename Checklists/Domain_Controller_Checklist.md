@@ -59,7 +59,7 @@ This checklist outlines the actions to secure and stabilize the Domain Controlle
 	Execute BlueShield.ps1 to apply overall AD, Kerberos, LSASS, Defender, and service hardening:
 		a. You can find the script by following the next url: https://github.com/Coastline-XploitClub/CCDC-26/blob/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/BlueShield.ps1
 		• Follow the interactive prompts and apply secure defaults.
-		• Do not disable IPv6 unless absolutely necessary for the competition.
+		• Do not disable IPv6 or LDAP unless absolutely necessary for the competition.
 	
 ## 10. Begin Full Enumeration
 	Once hardening is complete:
