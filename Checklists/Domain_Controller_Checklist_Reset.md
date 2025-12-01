@@ -94,19 +94,19 @@ c. Enable DNSSEC
   
   Navigate:
   
-  Domain Controllers → Domain Hardening
-
-
-  Open:
+    Domain Controllers → Domain Hardening
   
-  Computer Configuration → Policies → Windows Settings → Security Settings → Advanced Audit Policy Configuration
+  
+    Open:
+    
+    Computer Configuration → Policies → Windows Settings → Security Settings → Advanced Audit Policy Configuration
 
 
   Enable all categories required by your logging guide.
 
 ## 6. Run BlueShield.ps1 (Full Hardening)
   Download
-  Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Coastline-XploitClub/CCDC-26/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/BlueShield.ps1" -OutFile "BlueShield.ps1"
+    Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Coastline-XploitClub/CCDC-26/main/Scripts/Powershell%20Scripts/Domain%20Controller%20Scripts/BlueShield.ps1" -OutFile "BlueShield.ps1"
   
   Run
   .\BlueShield.ps1
@@ -114,7 +114,7 @@ c. Enable DNSSEC
 
   Follow secure defaults
   
-  Do NOT disable IPv6 and LDAP unless absolutely required
+  Do NOT disable IPv6 or LDAP unless absolutely required
 
 ## 7. Post-Hardening Enumeration
 
