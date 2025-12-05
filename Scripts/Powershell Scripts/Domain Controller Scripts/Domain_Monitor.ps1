@@ -1,10 +1,10 @@
 # =====================================================================
-# BlueShield Dashboard v25.20 (Competition Master)
+# BlueShield Dashboard v25.21 (UI Polish & Log Fix)
 # Features:
-#   • TIME: Strict 9:00 AM - 5:00 PM Competition Window
-#   • VISUALS: Pie Chart Restored (Security vs DNS)
-#   • DEFENSE: Zerologon & Concurrent Admin Detection Active
-#   • STABILITY: Includes all previous crash fixes
+#   • UI FIX: DNS Counter matches Security Counter exactly
+#   • LOG FIX: Reads DNS logs even if date parsing is tricky
+#   • DEFENSE: Zerologon (5805/4742) + RDP Monitoring
+#   • VISUALS: Pie Chart + Strict 9am-5pm Mode
 #
 # RUN AS ADMINISTRATOR
 # =====================================================================
@@ -45,22 +45,28 @@ $Global:ProcessedIDs = [System.Collections.Generic.HashSet[string]]::new()
 $Global:ActiveAdminSessions = [System.Collections.Hashtable]::Synchronized(@{})
 
 # -----------------------------
-# 1. SETUP & TIME CALC
+# 1. SETUP & TIME
 # -----------------------------
 $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { Write-Error "Run as Admin"; exit }
 
 try { $z=Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue; if($z){Stop-Process -Id $z.OwningProcess -Force} } catch {}
 
-# CALCULATE 9AM - 5PM WINDOW
+# TIME WINDOW CALCULATION
 $Today = Get-Date -Hour 0 -Minute 0 -Second 0
 $CompStart = $Today.AddHours($CompStartHour)
 $CompEnd   = $Today.AddHours($CompEndHour)
-$Global:LastPoll = $CompStart # Start fetching from 9 AM
+$Global:LastPoll = $CompStart 
 
-Write-Host "===== BlueShield v25.20 (Master) =====" -ForegroundColor Cyan
-Write-Host " [Time] Window: $CompStart to $CompEnd" -ForegroundColor Gray
-if (Test-Path $DnsTextLogPath) { Write-Host " [Init] DNS Log found." -ForegroundColor Green }
+Write-Host "===== BlueShield v25.21 (UI Polish) =====" -ForegroundColor Cyan
+Write-Host " [Time] Monitoring: $CompStart to $CompEnd" -ForegroundColor Gray
+
+if (Test-Path $DnsTextLogPath) { 
+    $dnsSize = (Get-Item $DnsTextLogPath).Length / 1KB
+    Write-Host " [Init] DNS Log found ($([math]::Round($dnsSize,2)) KB)." -ForegroundColor Green 
+} else {
+    Write-Host " [Init] DNS Log NOT found at $DnsTextLogPath" -ForegroundColor Red
+}
 
 # -----------------------------
 # 2. LOGIC ENGINE
@@ -217,7 +223,7 @@ function Fetch-WinEvents {
         }
     } catch {}
 
-    # 2. SYSTEM LOG (Zerologon 5805)
+    # 2. SYSTEM (Zerologon)
     try {
         $sys = Get-WinEvent -FilterHashtable @{LogName='System'; Id=5805; StartTime=$Start; EndTime=$End} -ErrorAction SilentlyContinue
         if ($sys) {
@@ -225,7 +231,7 @@ function Fetch-WinEvents {
         }
     } catch {}
 
-    # 3. DNS TEXT LOG
+    # 3. DNS TEXT LOG (With Fallback for testing)
     if (Test-Path $DnsTextLogPath) {
         try {
             $lines = Get-Content $DnsTextLogPath -Tail 500 -ErrorAction SilentlyContinue
@@ -234,18 +240,21 @@ function Fetch-WinEvents {
                     if ([string]::IsNullOrWhiteSpace($line) -or $line -match "^#") { continue }
                     $ip = "-"; if ($line -match '(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})') { $ip = $matches[1] }
                     
-                    $timestamp = $End 
+                    $timestamp = $End # Default to 'Now' so it shows up in feed even if old
                     try {
                         $parts = $line -split " "
                         if ($parts.Count -gt 2) {
                             $testDate = $parts[0] + " " + $parts[1] + " " + $parts[2]
-                            $timestamp = [DateTime]::Parse($testDate)
+                            $parsed = [DateTime]::Parse($testDate)
+                            # If date is today, use it. If it's old but we are testing, allow it? 
+                            # Strict Mode:
+                            $timestamp = $parsed
                         }
                     } catch {}
                     
                     $pseudoId = "DNS-" + ($line.GetHashCode() % 10000)
 
-                    # Time Window Check (9am-5pm)
+                    # Only show logs inside window
                     if ($timestamp -ge $Start -and $timestamp -le $End) {
                          Add-To-Feed "DNS" $pseudoId $timestamp "-" $ip $line $line
                     }
@@ -305,7 +314,7 @@ try {
 <!DOCTYPE html>
 <html>
 <head>
-<title>BlueShield v25.20</title>
+<title>BlueShield v25.21</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
     body { background: #0d1117; color: #c9d1d9; font-family: 'Segoe UI', sans-serif; margin:0; padding:20px; display:flex; gap:20px; height:94vh; overflow:hidden; }
@@ -370,9 +379,12 @@ try {
 
 <div class="left">
     <h2 style="color:#58a6ff; margin:0;">BlueShield</h2>
-    <div style="font-size:11px; color:#555; margin-bottom:15px;">v25.20 Master</div>
+    <div style="font-size:11px; color:#555; margin-bottom:15px;">v25.21 Master</div>
     <div class="stat-box tot"><span class="num" id="s_tot">0</span><span class="lbl">Total Events</span></div>
+    
     <div class="stat-box tot"><span class="num" id="s_sec">0</span><span class="lbl">Security</span></div>
+    <div class="stat-box tot"><span class="num" id="s_dns">0</span><span class="lbl">DNS</span></div>
+    
     <div class="stat-box crit"><span class="num" id="s_crit">0</span><span class="lbl">Critical</span></div>
     
     <div class="stat-box" style="border-color:#ff00ff; margin-top:20px;">
@@ -384,7 +396,7 @@ try {
         <canvas id="myChart"></canvas>
     </div>
 
-    <div style="margin-top:auto; font-size:11px; color:#555;">v25.20</div>
+    <div style="margin-top:auto; font-size:11px; color:#555;">v25.21</div>
 </div>
 
 <div class="right">
@@ -451,6 +463,7 @@ try {
             const sec = parseInt(s[1]);
             const dns = parseInt(s[2]);
             document.getElementById('s_sec').innerText = sec;
+            document.getElementById('s_dns').innerText = dns;
             document.getElementById('s_crit').innerText = s[3];
             document.getElementById('s_active').innerText = s[4];
 
@@ -502,7 +515,6 @@ try {
     }
 
     function doAck(id, btn) {
-        // Enforce string ID for JS
         fetch('/ack?id=' + encodeURIComponent(id)).then(() => {
             btn.closest('.feed-item').style.opacity = '0.3';
             btn.innerText = 'ACKED';
@@ -519,7 +531,7 @@ try {
             }
         }
 
-        # Background Collection (Only in window)
+        # Background Collection
         $Now = Get-Date
         if ($Now -lt $CompEnd -and $Now -gt $CompStart) {
             Fetch-WinEvents $Global:LastPoll $Now
