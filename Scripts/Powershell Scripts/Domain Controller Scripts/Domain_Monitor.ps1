@@ -1,10 +1,10 @@
 # =====================================================================
-# BlueShield Dashboard v25.19 (Fix & Stability Edition)
+# BlueShield Dashboard v25.20 (Competition Master)
 # Features:
-#   • CRASH FIX: Handles empty XML data in Security logs safely
-#   • DNS FIX: Forces DNS logs to show even if date parsing fails
-#   • ACK FIX: Supports non-numeric IDs for text logs
-#   • CLIENT LITE UI: Clean interface (No charts)
+#   • TIME: Strict 9:00 AM - 5:00 PM Competition Window
+#   • VISUALS: Pie Chart Restored (Security vs DNS)
+#   • DEFENSE: Zerologon & Concurrent Admin Detection Active
+#   • STABILITY: Includes all previous crash fixes
 #
 # RUN AS ADMINISTRATOR
 # =====================================================================
@@ -15,10 +15,8 @@ Add-Type -AssemblyName System.Web
 # 0. CONFIGURATION
 # -----------------------------
 $Port = 8888
-
-# WIDE TIME WINDOW (Last 24 Hours)
-$CompStart = (Get-Date).AddHours(-24)
-$CompEnd   = (Get-Date).AddHours(1)
+$CompStartHour = 9     # 9:00 AM
+$CompEndHour   = 17    # 5:00 PM
 
 # PATH TO TEXT LOG
 $DnsTextLogPath = "C:\dns.log" 
@@ -43,19 +41,25 @@ $DnsEvents           = [System.Collections.ArrayList]::Synchronized((New-Object 
 $CriticalEvents      = [System.Collections.ArrayList]::Synchronized((New-Object System.Collections.ArrayList))
 $Feed                = [System.Collections.ArrayList]::Synchronized((New-Object System.Collections.ArrayList))
 $Global:ProcessedIDs = [System.Collections.Generic.HashSet[string]]::new()
-$Global:LastPoll     = $CompStart 
 
 $Global:ActiveAdminSessions = [System.Collections.Hashtable]::Synchronized(@{})
 
 # -----------------------------
-# 1. SETUP
+# 1. SETUP & TIME CALC
 # -----------------------------
 $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { Write-Error "Run as Admin"; exit }
 
 try { $z=Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue; if($z){Stop-Process -Id $z.OwningProcess -Force} } catch {}
 
-Write-Host "===== BlueShield v25.19 (Stability Fix) =====" -ForegroundColor Cyan
+# CALCULATE 9AM - 5PM WINDOW
+$Today = Get-Date -Hour 0 -Minute 0 -Second 0
+$CompStart = $Today.AddHours($CompStartHour)
+$CompEnd   = $Today.AddHours($CompEndHour)
+$Global:LastPoll = $CompStart # Start fetching from 9 AM
+
+Write-Host "===== BlueShield v25.20 (Master) =====" -ForegroundColor Cyan
+Write-Host " [Time] Window: $CompStart to $CompEnd" -ForegroundColor Gray
 if (Test-Path $DnsTextLogPath) { Write-Host " [Init] DNS Log found." -ForegroundColor Green }
 
 # -----------------------------
@@ -98,17 +102,18 @@ function Update-SessionState {
 
 function Get-Meta {
     param($id,$msg,$ip,$user)
-    # Check ACK (String comparison to handle text log IDs)
     foreach ($r in $Global:AckList) { if ("$($r.Id)" -eq "$id") { return @{C="suppressed"; L="ACK"} } }
 
     $m = @{ L="SEC"; C="sec"; Lev="n" }
     
+    # ZEROLOGON
     if ($id -eq 5805) { $m.L="ZEROLOGON"; $m.C="critical-badge"; $m.Lev="c"; return $m }
     if ($id -eq 4742) {
         $target = Extract-Regex $msg "Target User Name:\s+(\S+)"
         if ($target -like "$DCName`$*") { $m.L="ZEROLOGON SUCCESS"; $m.C="critical-badge"; $m.Lev="c"; return $m }
     }
 
+    # CONCURRENT ADMINS
     $uniqueAdmins = $Global:ActiveAdminSessions.Values | Select-Object -Unique
     if ($uniqueAdmins.Count -gt 1 -and $AdminUsers -contains $user.ToLower() -and $id -eq 4624) {
         $m.L="MULTIPLE ADMINS"; $m.C="critical-badge"; $m.Lev="c"; return $m
@@ -128,7 +133,7 @@ function Get-Meta {
 
 function Format-LogDetails {
     param($msg, $type, $rawLine, $id)
-    if ($id -eq 5805) { return "<div class='msg' style='color:red'>NETLOGON FAILURE (ZEROLOGON ATTEMPT)</div><div class='msg'>$msg</div>" }
+    if ($id -eq 5805) { return "<div class='msg' style='color:red; font-weight:bold'>NETLOGON FAILURE (ZEROLOGON ATTEMPT)</div><div class='msg'>$msg</div>" }
     
     if ($type -eq "DNS" -and $rawLine) {
         try {
@@ -151,7 +156,6 @@ function Format-LogDetails {
 function Add-To-Feed {
     param($Type, $Id, $Time, $User, $Ip, $Msg, $RawLine=$null)
     
-    # Hash check to prevent duplicates
     $hashKey = "$Id-$Time-$($Msg.GetHashCode())"
     if ($Global:ProcessedIDs.Contains($hashKey)) { return }
     $Global:ProcessedIDs.Add($hashKey) | Out-Null
@@ -173,7 +177,6 @@ function Add-To-Feed {
     $rowClass = $meta.C
     if ($meta.L -match "ZEROLOGON" -or $meta.L -eq "MULTIPLE ADMINS") { $rowClass = "critical zerologon-alert" }
 
-    # Pass ID as string to support DNS text IDs
     $row = @"
 <div class='feed-item $rowClass $($meta.Lev)' data-type='$Type' data-user='$User' data-ip='$Ip' data-time='$ts'>
     <div class='head'>
@@ -196,13 +199,12 @@ function Add-To-Feed {
 function Fetch-WinEvents {
     param($Start, $End)
     
-    # 1. SECURITY (With Null Check Fix)
+    # 1. SECURITY
     try { 
         $s = Get-WinEvent -FilterHashtable @{LogName='Security'; StartTime=$Start; EndTime=$End} -ErrorAction SilentlyContinue
         if ($s) {
             $s | Sort-Object TimeCreated | ForEach-Object {
                 $u="-"; $ip="-"
-                # FIX: SAFETY CHECK FOR XML
                 try { 
                     $xml = [xml]$_.ToXml()
                     if ($xml.Event.EventData) {
@@ -213,9 +215,9 @@ function Fetch-WinEvents {
                 Add-To-Feed "SECURITY" $_.Id $_.TimeCreated $u $ip $_.Message
             }
         }
-    } catch { Write-Host " [Error] Security Log error handled." -ForegroundColor DarkGray }
+    } catch {}
 
-    # 2. SYSTEM LOG (Event 5805)
+    # 2. SYSTEM LOG (Zerologon 5805)
     try {
         $sys = Get-WinEvent -FilterHashtable @{LogName='System'; Id=5805; StartTime=$Start; EndTime=$End} -ErrorAction SilentlyContinue
         if ($sys) {
@@ -223,7 +225,7 @@ function Fetch-WinEvents {
         }
     } catch {}
 
-    # 3. DNS TEXT LOG (With Fallback Date Fix)
+    # 3. DNS TEXT LOG
     if (Test-Path $DnsTextLogPath) {
         try {
             $lines = Get-Content $DnsTextLogPath -Tail 500 -ErrorAction SilentlyContinue
@@ -232,34 +234,30 @@ function Fetch-WinEvents {
                     if ([string]::IsNullOrWhiteSpace($line) -or $line -match "^#") { continue }
                     $ip = "-"; if ($line -match '(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})') { $ip = $matches[1] }
                     
-                    # FIX: ROBUST DATE PARSING
-                    $timestamp = $End # Default to Now if parse fails
+                    $timestamp = $End 
                     try {
                         $parts = $line -split " "
                         if ($parts.Count -gt 2) {
                             $testDate = $parts[0] + " " + $parts[1] + " " + $parts[2]
                             $timestamp = [DateTime]::Parse($testDate)
                         }
-                    } catch { 
-                        # Date parse failed, keep using 'Now' so log shows up
-                    }
+                    } catch {}
                     
-                    # Use Random ID for text logs so ACK works
                     $pseudoId = "DNS-" + ($line.GetHashCode() % 10000)
 
-                    # Always add if within general window or just now
-                    if ($timestamp -ge $Start) {
+                    # Time Window Check (9am-5pm)
+                    if ($timestamp -ge $Start -and $timestamp -le $End) {
                          Add-To-Feed "DNS" $pseudoId $timestamp "-" $ip $line $line
                     }
                 }
             }
-        } catch { Write-Host " [Error] DNS file read error." -ForegroundColor DarkGray }
+        } catch {}
     }
 }
 
 # --- INITIAL LOAD ---
-Write-Host " [Status] Pre-loading logs..." -ForegroundColor Yellow
-Fetch-WinEvents $Global:LastPoll (Get-Date)
+Write-Host " [Status] Loading logs from 9:00 AM..." -ForegroundColor Yellow
+Fetch-WinEvents $CompStart (Get-Date)
 $Global:LastPoll = Get-Date
 Write-Host " [Ready] Dashboard: http://localhost:$Port" -ForegroundColor Green
 
@@ -297,7 +295,6 @@ try {
                 $res.Close()
             }
             elseif ($path -eq "/ack") {
-                # FIX: Handle String IDs
                 $qs = [System.Web.HttpUtility]::ParseQueryString($req.Url.Query)
                 $ackId = $qs["id"]
                 if ($ackId) { $Global:AckList.Add(@{ Id=$ackId }) | Out-Null }
@@ -308,7 +305,8 @@ try {
 <!DOCTYPE html>
 <html>
 <head>
-<title>BlueShield v25.19</title>
+<title>BlueShield v25.20</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
     body { background: #0d1117; color: #c9d1d9; font-family: 'Segoe UI', sans-serif; margin:0; padding:20px; display:flex; gap:20px; height:94vh; overflow:hidden; }
     
@@ -318,6 +316,8 @@ try {
     .stat-box.crit { border-color: #ff7b72; }
     .num { font-size: 24px; font-weight: bold; color: #f0f6fc; display:block; }
     .lbl { font-size: 12px; color: #8b949e; text-transform:uppercase; letter-spacing:1px; }
+
+    .chart-container { margin-top: 10px; padding: 10px; background: #21262d; border-radius: 6px; }
 
     .right { flex-grow:1; display:flex; flex-direction:column; gap:10px; }
     
@@ -370,7 +370,7 @@ try {
 
 <div class="left">
     <h2 style="color:#58a6ff; margin:0;">BlueShield</h2>
-    <div style="font-size:11px; color:#555; margin-bottom:15px;">v25.19 Debug Fix</div>
+    <div style="font-size:11px; color:#555; margin-bottom:15px;">v25.20 Master</div>
     <div class="stat-box tot"><span class="num" id="s_tot">0</span><span class="lbl">Total Events</span></div>
     <div class="stat-box tot"><span class="num" id="s_sec">0</span><span class="lbl">Security</span></div>
     <div class="stat-box crit"><span class="num" id="s_crit">0</span><span class="lbl">Critical</span></div>
@@ -380,7 +380,11 @@ try {
         <span class="lbl">Active Admins (RDP)</span>
     </div>
 
-    <div style="margin-top:auto; font-size:11px; color:#555;">v25.19</div>
+    <div class="chart-container">
+        <canvas id="myChart"></canvas>
+    </div>
+
+    <div style="margin-top:auto; font-size:11px; color:#555;">v25.20</div>
 </div>
 
 <div class="right">
@@ -415,6 +419,26 @@ try {
 <script>
     let currentType = 'all';
     
+    // CHART SETUP
+    const ctx = document.getElementById('myChart').getContext('2d');
+    const myChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: ['Security', 'DNS'],
+            datasets: [{
+                data: [0, 0],
+                backgroundColor: ['#58a6ff', '#bc8cff'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { labels: { color: '#8b949e', font: {size: 10} } }
+            }
+        }
+    });
+
     loadData();
 
     function loadData() {
@@ -424,9 +448,15 @@ try {
             const s = p[0].split('|');
             
             document.getElementById('s_tot').innerText = s[0];
-            document.getElementById('s_sec').innerText = s[1];
+            const sec = parseInt(s[1]);
+            const dns = parseInt(s[2]);
+            document.getElementById('s_sec').innerText = sec;
             document.getElementById('s_crit').innerText = s[3];
             document.getElementById('s_active').innerText = s[4];
+
+            // Update Pie Chart
+            myChart.data.datasets[0].data = [sec, dns];
+            myChart.update();
 
             const fd = document.getElementById('feedArea');
             if (fd.innerHTML.length !== p[1].length) { fd.innerHTML = p[1]; applyFilters(); }
@@ -489,9 +519,9 @@ try {
             }
         }
 
-        # Background Collection
+        # Background Collection (Only in window)
         $Now = Get-Date
-        if ($Now -lt $CompEnd) {
+        if ($Now -lt $CompEnd -and $Now -gt $CompStart) {
             Fetch-WinEvents $Global:LastPoll $Now
             $Global:LastPoll = $Now
         }
