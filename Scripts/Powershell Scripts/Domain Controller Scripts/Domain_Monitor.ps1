@@ -1,10 +1,10 @@
 # =====================================================================
-# BlueShield Dashboard v25.12 (Deep Dive Edition)
+# BlueShield Dashboard v25.18 (Machine Filter Edition)
 # Features:
-#   • SECURITY DECODER: Extracts key fields (Logon Type, Process) into tables
-#   • ADVANCED DNS: Extracts Query Type (A/AAAA) and Status (NOERROR/NXDOMAIN)
-#   • IP SAFETY CHECK: Flags External IPs in Red
-#   • UNIVERSAL LOGGING: Supports Event Logs + Text Logs
+#   • INTELLIGENT FILTER: Ignores Computer Accounts (ending in $)
+#   • ZEROLOGON TRACE: Highlights Attacker IP in Red
+#   • CONCURRENT ALERT: Only triggers on HUMAN admins
+#   • UPDATED CONFIG: Removed machine names from watchlist
 #
 # RUN AS ADMINISTRATOR
 # =====================================================================
@@ -18,11 +18,18 @@ $Port = 8888
 $CompStartHour = 9     # 9:00 AM
 $CompEndHour   = 17    # 5:00 PM
 
-# PATH TO YOUR DNS TEXT LOG
-$DnsTextLogPath = "C:\dns.log"
+# PATH TO TEXT LOG (Optional)
+$DnsTextLogPath = "C:\dns.log" 
 
-# TRUSTED NETWORK (IPs matching this are "Safe")
+# TRUSTED NETWORK
 $TrustedNetwork = "192.168.220." 
+
+# ADMIN USERS (Watchlist for Human Admins Only)
+# Removed 'fernbank' and 'trex' as they are machines
+$AdminUsers = @("administrator", "admin", "cesar_la")
+
+# DOMAIN CONTROLLER NAME (Auto-detect)
+$DCName = $env:COMPUTERNAME 
 
 # Noise Filters
 $NoiseFilter = @("NT AUTHORITY\SYSTEM", "Window Manager", "192.168.220.70")
@@ -39,6 +46,8 @@ $Feed                = [System.Collections.ArrayList]::Synchronized((New-Object 
 $Global:ProcessedIDs = [System.Collections.Generic.HashSet[string]]::new()
 $Global:LastPoll     = Get-Date
 
+$Global:ActiveAdminSessions = [System.Collections.Hashtable]::Synchronized(@{})
+
 # -----------------------------
 # 1. SETUP
 # -----------------------------
@@ -51,8 +60,8 @@ $Today = Get-Date -Hour 0 -Minute 0 -Second 0
 $CompStart = $Today.AddHours($CompStartHour)
 $CompEnd   = $Today.AddHours($CompEndHour)
 
-Write-Host "===== BlueShield v25.12 (Deep Dive) =====" -ForegroundColor Cyan
-if (Test-Path $DnsTextLogPath) { Write-Host " [Init] DNS Log: $DnsTextLogPath" -ForegroundColor Green }
+Write-Host "===== BlueShield v25.18 (Machine Filter) =====" -ForegroundColor Cyan
+Write-Host " [Init] Human Admin Watchlist: $($AdminUsers -join ', ')" -ForegroundColor Gray
 
 # -----------------------------
 # 2. LOGIC ENGINE
@@ -71,15 +80,63 @@ function Analyze-IP {
     param($ip)
     if ($ip -eq "-" -or $ip -eq "::1" -or $ip -like "127.*") { return $false }
     if ($ip -like "$TrustedNetwork*") { return $false }
-    return $true # Suspicious
+    return $true 
+}
+
+function Extract-Regex { param($txt, $pat); if ($txt -match $pat) { return $matches[1].Trim() }; return $null }
+
+function Update-SessionState {
+    param($Id, $User, $Msg)
+    
+    # FILTER: Ignore Machine Accounts (Ending in $)
+    if ($User.EndsWith("$")) { return }
+
+    if ($Id -eq 4624 -and $Msg -match "Logon Type:\s+10") {
+        $lId = Extract-Regex $Msg "Logon ID:\s+(0x[0-9a-fA-F]+)"
+        # Check against Admin List
+        if ($lId -and ($AdminUsers -contains $User.ToLower())) {
+            if (-not $Global:ActiveAdminSessions.ContainsKey($lId)) { $Global:ActiveAdminSessions[$lId] = $User }
+        }
+    }
+    if ($Id -eq 4634 -or $Id -eq 4647) {
+        $lId = Extract-Regex $Msg "Logon ID:\s+(0x[0-9a-fA-F]+)"
+        if ($lId -and $Global:ActiveAdminSessions.ContainsKey($lId)) { $Global:ActiveAdminSessions.Remove($lId) }
+    }
 }
 
 function Get-Meta {
-    param($id,$msg,$ip)
+    param($id,$msg,$ip,$user)
     foreach ($r in $Global:AckList) { if ($r.Id -eq $id) { return @{C="suppressed"; L="ACK"} } }
 
     $m = @{ L="SEC"; C="sec"; Lev="n" }
     
+    # --- ZEROLOGON DETECTION ---
+    if ($id -eq 5805) {
+        $m.L = "ZEROLOGON ATTEMPT"
+        $m.C = "critical-badge"
+        $m.Lev = "c"
+        return $m
+    }
+    if ($id -eq 4742) {
+        $target = Extract-Regex $msg "Target User Name:\s+(\S+)"
+        if ($target -like "$DCName`$*") {
+            $m.L = "ZEROLOGON SUCCESS"
+            $m.C = "critical-badge"
+            $m.Lev = "c"
+            return $m
+        }
+    }
+
+    # Concurrent Admin Check
+    $uniqueAdmins = $Global:ActiveAdminSessions.Values | Select-Object -Unique
+    # Trigger if > 1 admin AND the current user is an admin AND it's a login event
+    if ($uniqueAdmins.Count -gt 1 -and $AdminUsers -contains $user.ToLower() -and $id -eq 4624) {
+        $m.L = "MULTIPLE ADMINS"
+        $m.C = "critical-badge"
+        $m.Lev = "c"
+        return $m
+    }
+
     if ($msg -match "DNS" -or $id -eq "DNS") { 
         $m.L="DNS"; $m.C="dns"
         if (Analyze-IP $ip) { $m.L="EXT DNS"; $m.C="red"; $m.Lev="c" }
@@ -89,112 +146,77 @@ function Get-Meta {
     elseif ($id -in 4728,4729,4732,4756) { $m.L="GROUP"; $m.C="group"; $m.Lev="c" }
     elseif ($msg -match $SusKeywords) { $m.L="SUS PROC"; $m.C="proc"; $m.Lev="c" }
     elseif ($id -in 4625,1102) { $m.L="FAIL/CLR"; $m.C="crit"; $m.Lev="c" }
-    elseif ($msg -match "failed|malware|attack") { $m.L="ALERT"; $m.C="crit"; $m.Lev="c" }
+    
+    if ($id -eq 4624 -and $msg -match "Logon Type:\s+10") { $m.L="RDP LOGIN"; $m.C="red"; $m.Lev="c" }
     
     if ($ip -like "10.100.*") { $m.L="RED TEAM"; $m.C="red"; $m.Lev="c" }
     return $m
 }
 
-function Extract-Regex { param($txt, $pat); if ($txt -match $pat) { return $matches[1].Trim() }; return $null }
-
 function Format-LogDetails {
     param($msg, $type, $rawLine, $id)
     
-    # --- DNS ENHANCED ---
+    # --- ZEROLOGON TRACE ---
+    if ($id -eq 5805) {
+        $badMachine = Extract-Regex $msg "computer\s+([^\s]+)\s+failed"
+        return "<div class='msg' style='color:#ff4d4d; font-weight:bold;'>NETLOGON FAILURE (POTENTIAL ZEROLOGON)<br>Attacking Machine Name: <span style='background:white; color:red; padding:2px;'>$badMachine</span><br>Check DNS logs for this name to find the IP!</div><div class='msg'>$msg</div>"
+    }
+    if ($id -eq 4742) {
+        $target = Extract-Regex $msg "Target User Name:\s+(\S+)"
+        if ($target -like "$DCName`$*") {
+            $srcIp = Extract-Regex $msg "Source Network Address:\s+([0-9\.]+)"
+            if (-not $srcIp) { $srcIp = "UNKNOWN (Check Packet Capture)" }
+             return "<div class='msg' style='color:#ff00ff; font-weight:bold; font-size:14px; border:2px solid red; padding:10px;'>CRITICAL: DC PASSWORD RESET<br>Target: $target<br>ATTACKER IP: <span style='background:yellow; color:red; font-size:18px;'>$srcIp</span><br>BLOCK THIS IP IMMEDIATELY.</div><div class='msg'>$msg</div>"
+        }
+    }
+
     if ($type -eq "DNS" -and $rawLine) {
         try {
-            # Extract basic parts
             $proto = if ($rawLine -match "UDP|TCP") { $matches[0] } else { "-" }
             $dir   = if ($rawLine -match "Snd|Rcv") { $matches[0] } else { "-" }
-            
-            # Extract IP
             $ip = "-"
             if ($rawLine -match '(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})') { $ip = $matches[1] }
-            
-            # Extract Domain
             $query = "-"
             if ($rawLine -match '\(\d+\)[a-zA-Z0-9\-\.]+\(\d+\)') { $query = Clean-DnsDomain $matches[0] }
-
-            # Extract Query Type (A, AAAA, PTR) - typically appears as " [xxxx A "
-            $qType = "-"
-            if ($rawLine -match '\s(A|AAAA|PTR|SRV|TXT|SOA)\s') { $qType = $matches[1] }
-
-            # Extract Status (NOERROR, NXDOMAIN)
-            $status = "UNKNOWN"
-            $statusColor = "#888"
-            if ($rawLine -match '(NOERROR|NXDOMAIN|SERVFAIL|REFUSED)') { 
+            $status = "UNKNOWN"; $statusColor = "#888"
+            if ($rawLine -match '(NOERROR|NXDOMAIN)') { 
                 $status = $matches[1] 
-                if ($status -eq "NOERROR") { $statusColor = "#4caf50" } # Green
-                elseif ($status -eq "NXDOMAIN") { $statusColor = "#ff4d4d" } # Red
+                if ($status -eq "NOERROR") { $statusColor = "#4caf50" }
+                elseif ($status -eq "NXDOMAIN") { $statusColor = "#ff4d4d" }
             }
-
             return @"
 <table class='detail-table'>
-    <tr><th>Proto</th><th>Dir</th><th>Remote IP</th><th>Type</th><th>Status</th><th>Query</th></tr>
-    <tr>
-        <td>$proto</td>
-        <td>$dir</td>
-        <td>$($ip) $(if(Analyze-IP $ip){"<span class='tag-bad'>EXT</span>"})</td>
-        <td>$qType</td>
-        <td style='color:$statusColor; font-weight:bold;'>$status</td>
-        <td style='color:#fff'>$query</td>
-    </tr>
+    <tr><th>Proto</th><th>Dir</th><th>Remote IP</th><th>Status</th><th>Query</th></tr>
+    <tr><td>$proto</td><td>$dir</td><td>$($ip) $(if(Analyze-IP $ip){"<span class='tag-bad'>EXT</span>"})</td><td style='color:$statusColor'>$status</td><td style='color:#fff'>$query</td></tr>
 </table>
-<div class='raw-line'>Raw: $rawLine</div>
 "@
         } catch { return $msg }
     }
 
-    # --- SECURITY ENHANCED ---
     if ($type -eq "SECURITY") {
         $summaryHtml = ""
-        
-        # LOGON EVENTS (4624/4625)
         if ($id -eq 4624 -or $id -eq 4625) {
             $lType = Extract-Regex $msg "Logon Type:\s+(\d+)"
             $acct  = Extract-Regex $msg "Account Name:\s+(\S+)"
             $srcIp = Extract-Regex $msg "Source Network Address:\s+([0-9\.]+)"
-            $proc  = Extract-Regex $msg "Process Name:\s+(.+)"
             
-            if ($srcIp -eq "-") { $srcIp = "Local/System" }
+            $logonDesc = "Unknown"
+            if ($lType -eq "2") { $logonDesc = "Interactive" }
+            elseif ($lType -eq "3") { $logonDesc = "Network" }
+            elseif ($lType -eq "10") { $logonDesc = "<span class='tag-bad'>RDP</span>" }
+            elseif ($lType -eq "5") { $logonDesc = "Service" }
 
             $summaryHtml = @"
 <table class='detail-table'>
-    <tr><th>Logon Type</th><th>Account</th><th>Source IP</th><th>Process</th></tr>
-    <tr>
-        <td><span class='highlight'>$lType</span></td>
-        <td>$acct</td>
-        <td>$srcIp</td>
-        <td>$proc</td>
-    </tr>
-</table>
-<div style='margin-bottom:8px; font-size:11px; color:#888;'>Type 2=Interactive, 3=Network, 10=RDP</div>
-"@
-        }
-        
-        # PROCESS CREATION (4688)
-        if ($id -eq 4688) {
-            $newProc = Extract-Regex $msg "New Process Name:\s+(.+)"
-            $parent  = Extract-Regex $msg "Parent Process Name:\s+(.+)"
-            $cmd     = Extract-Regex $msg "Process Command Line:\s+(.+)"
-            
-            $summaryHtml = @"
-<table class='detail-table'>
-    <tr><th>New Process</th><th>Parent Process</th></tr>
-    <tr><td style='word-break:break-all'>$newProc</td><td style='word-break:break-all'>$parent</td></tr>
-    <tr><td colspan='2' style='color:#ccc; font-family:monospace; border-top:1px solid #333;'>CMD: $cmd</td></tr>
+    <tr><th>Logon Type</th><th>Description</th><th>Account</th><th>Source IP</th></tr>
+    <tr><td><span class='highlight'>$lType</span></td><td>$logonDesc</td><td>$acct</td><td>$srcIp</td></tr>
 </table>
 "@
         }
-
-        # Standard Text Formatting for the rest
         $enc = [System.Web.HttpUtility]::HtmlEncode($msg)
         $enc = $enc -replace '(?m)(^|\s)([A-Za-z0-9\s]+):', '$1<span class="log-key">$2:</span>'
-        $enc = $enc -replace '(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', '<span class="log-ip">$1</span>'
-        
         return "$summaryHtml<div class='msg'>$enc</div>"
     }
-
     return "<div class='msg'>$([System.Web.HttpUtility]::HtmlEncode($msg))</div>"
 }
 
@@ -207,18 +229,31 @@ function Add-To-Feed {
 
     if ($NoiseFilter -contains $User -or $NoiseFilter -contains $Ip) { return }
 
-    $meta = Get-Meta -id $Id -msg $Msg -ip $Ip
+    Update-SessionState $Id $User $Msg
+
+    $meta = Get-Meta -id $Id -msg $Msg -ip $Ip -user $User
     $detailsHTML = Format-LogDetails $Msg $Type $RawLine $Id
     
     if ($Time -is [DateTime]) { $ts = $Time.ToString("HH:mm:ss") } else { $ts = $Time }
     $User = if($User){$User}else{"-"}
     $Ip = if($Ip){$Ip}else{"-"}
+    
+    # --- IP OVERRIDE FOR ZEROLOGON 4742 ---
+    if ($Id -eq 4742 -and $meta.L -eq "ZEROLOGON SUCCESS") {
+        $extractedIp = Extract-Regex $Msg "Source Network Address:\s+([0-9\.]+)"
+        if ($extractedIp) { $Ip = $extractedIp }
+    }
 
     $ipDisplay = $Ip
-    if (Analyze-IP $Ip) { $ipDisplay = "<span class='ip-danger'>$Ip ⚠️</span>" }
+    if ($meta.L -eq "RDP LOGIN") { $ipDisplay = "<span class='ip-danger'>$Ip (RDP)</span>" }
+    elseif (Analyze-IP $Ip) { $ipDisplay = "<span class='ip-danger'>$Ip ⚠️</span>" }
+
+    $rowClass = $meta.C
+    if ($meta.L -match "ZEROLOGON") { $rowClass = "critical zerologon-alert" }
+    elseif ($meta.L -eq "MULTIPLE ADMINS") { $rowClass = "critical multiple-admins" }
 
     $row = @"
-<div class='feed-item $($meta.C) $($meta.Lev)' data-type='$Type' data-user='$User' data-ip='$Ip' data-time='$ts'>
+<div class='feed-item $rowClass $($meta.Lev)' data-type='$Type' data-user='$User' data-ip='$Ip' data-time='$ts'>
     <div class='head'>
         <span class='time'>$ts</span><span class='badge $($meta.C)'>$($meta.L)</span>
         <span class='meta'>ID:$Id | IP:$ipDisplay</span>
@@ -251,16 +286,23 @@ function Fetch-WinEvents {
         }
     } catch {}
 
-    # 2. DNS TEXT LOG
+    # 2. SYSTEM LOG
+    try {
+        $sys = Get-WinEvent -FilterHashtable @{LogName='System'; Id=5805; StartTime=$Start; EndTime=$End} -ErrorAction SilentlyContinue
+        if ($sys) {
+            $sys | ForEach-Object {
+                Add-To-Feed "SECURITY" $_.Id $_.TimeCreated "SYSTEM" "-" $_.Message
+            }
+        }
+    } catch {}
+
+    # 3. DNS TEXT LOG
     if (Test-Path $DnsTextLogPath) {
         try {
             $lines = Get-Content $DnsTextLogPath -Tail 200 -ErrorAction SilentlyContinue
             foreach ($line in $lines) {
                 if ([string]::IsNullOrWhiteSpace($line) -or $line -match "^#") { continue }
-                
-                $ip = "-"
-                if ($line -match '(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})') { $ip = $matches[1] }
-
+                $ip = "-"; if ($line -match '(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})') { $ip = $matches[1] }
                 $timestamp = $End
                 try {
                     $parts = $line -split " "
@@ -269,7 +311,6 @@ function Fetch-WinEvents {
                         $timestamp = [DateTime]::Parse($testDate)
                     }
                 } catch {}
-
                 if ($timestamp -ge $Start -and $timestamp -le $End) {
                      Add-To-Feed "DNS" "DNS" $timestamp "-" $ip $line $line
                 }
@@ -308,8 +349,11 @@ try {
                 $sec = $SecurityEvents.Count
                 $dns = $DnsEvents.Count
                 $crit = $CriticalEvents.Count
+                $admins = $Global:ActiveAdminSessions.Values | Select -Unique
+                $adminCount = $admins.Count
+                
                 $htmlFeed = $Feed -join ""
-                $payload = "$tot|$sec|$dns|$crit|DATA_START|$htmlFeed"
+                $payload = "$tot|$sec|$dns|$crit|$adminCount|DATA_START|$htmlFeed"
                 $bytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
                 $res.OutputStream.Write($bytes, 0, $bytes.Length)
                 $res.Close()
@@ -324,8 +368,7 @@ try {
 <!DOCTYPE html>
 <html>
 <head>
-<title>BlueShield v25.12</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<title>BlueShield v25.18</title>
 <style>
     body { background: #0d1117; color: #c9d1d9; font-family: 'Segoe UI', sans-serif; margin:0; padding:20px; display:flex; gap:20px; height:94vh; overflow:hidden; }
     
@@ -335,8 +378,6 @@ try {
     .stat-box.crit { border-color: #ff7b72; }
     .num { font-size: 24px; font-weight: bold; color: #f0f6fc; display:block; }
     .lbl { font-size: 12px; color: #8b949e; text-transform:uppercase; letter-spacing:1px; }
-
-    .chart-container { margin-top: 10px; padding: 10px; background: #21262d; border-radius: 6px; }
 
     .right { flex-grow:1; display:flex; flex-direction:column; gap:10px; }
     
@@ -355,6 +396,11 @@ try {
     .feed-item.dns { border-left-color: #bc8cff; }
     .feed-item.sec { border-left-color: #58a6ff; }
     
+    /* ANIMATIONS */
+    .feed-item.multiple-admins { border-left: 5px solid #ff00ff; background: rgba(255,0,255,0.15); animation: flash 2s infinite; }
+    .feed-item.zerologon-alert { border-left: 5px solid #ff4d4d; border: 2px solid #ff4d4d; background: rgba(255,0,0,0.2); animation: flash 1s infinite; }
+    @keyframes flash { 0% {opacity:1;} 50% {opacity:0.6;} 100% {opacity:1;} }
+    
     .head { display:flex; align-items:center; gap:10px; }
     .time { background: black; padding:2px 6px; border-radius:4px; font-family:monospace; font-size:11px; color:#8b949e; }
     .badge { font-weight:bold; font-size:10px; padding:2px 6px; border-radius:4px; color:#0d1117; }
@@ -362,21 +408,19 @@ try {
     .badge.dns { background: #bc8cff; }
     .badge.crit { background: #ff7b72; }
     .badge.red { background: #ff0000; color:white; }
+    .badge.critical-badge { background: #ff4d4d; color:white; box-shadow: 0 0 5px red; }
+    
     .meta { color: #8b949e; font-family:monospace; }
     .ip-danger { color: #ff4d4d; font-weight:bold; }
-
-    /* LOG FORMATTING */
     .msg { white-space: pre-wrap; font-family: 'Consolas', monospace; color: #d1d5da; padding-top:10px; font-size:12px; line-height: 1.4; }
     .log-key { color: #8b949e; font-weight:bold; }
     .log-ip  { color: #39c5bb; font-weight:bold; }
     .highlight { background: #1f6feb; color: white; padding: 1px 4px; border-radius: 2px; }
     
-    /* DETAIL TABLES */
     .detail-table { width:100%; border-collapse:collapse; margin-bottom:5px; font-family:'Consolas', monospace; font-size:12px; background:rgba(0,0,0,0.2); }
     .detail-table th { text-align:left; color:#8b949e; border-bottom:1px solid #444; padding:4px; background:#1e242e; }
     .detail-table td { color:#d1d5da; padding:4px; border-bottom:1px solid #222; }
     .tag-bad { background: #ff0000; color:white; padding:1px 4px; border-radius:2px; font-size:10px; margin-left:5px; }
-    .raw-line { font-size:10px; color:#555; font-family:monospace; margin-top:5px; border-top:1px solid #333; padding-top:2px; }
 
     .btn-ack { font-size:10px; padding:3px 8px; margin-left:auto; background: transparent; border: 1px solid #238636; color: #2ea043; font-weight: bold; transition: 0.2s; }
     .btn-ack:hover { background: #238636; color: white; cursor: pointer; }
@@ -386,16 +430,17 @@ try {
 
 <div class="left">
     <h2 style="color:#58a6ff; margin:0;">BlueShield</h2>
+    <div style="font-size:11px; color:#555; margin-bottom:15px;">v25.18 Machine Filter</div>
     <div class="stat-box tot"><span class="num" id="s_tot">0</span><span class="lbl">Total Events</span></div>
     <div class="stat-box tot"><span class="num" id="s_sec">0</span><span class="lbl">Security</span></div>
-    <div class="stat-box tot"><span class="num" id="s_dns">0</span><span class="lbl">DNS</span></div>
     <div class="stat-box crit"><span class="num" id="s_crit">0</span><span class="lbl">Critical</span></div>
     
-    <div class="chart-container">
-        <canvas id="myChart"></canvas>
+    <div class="stat-box" style="border-color:#ff00ff; margin-top:20px;">
+        <span class="num" id="s_active" style="color:#ff00ff">0</span>
+        <span class="lbl">Active Admins (RDP)</span>
     </div>
 
-    <div style="margin-top:auto; font-size:11px; color:#555;">v25.12 Deep Dive</div>
+    <div style="margin-top:auto; font-size:11px; color:#555;">v25.18</div>
 </div>
 
 <div class="right">
@@ -430,25 +475,6 @@ try {
 <script>
     let currentType = 'all';
     
-    const ctx = document.getElementById('myChart').getContext('2d');
-    const myChart = new Chart(ctx, {
-        type: 'pie',
-        data: {
-            labels: ['Security', 'DNS'],
-            datasets: [{
-                data: [0, 0],
-                backgroundColor: ['#58a6ff', '#bc8cff'],
-                borderWidth: 0
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: { labels: { color: '#8b949e', font: {size: 10} } }
-            }
-        }
-    });
-
     loadData();
 
     function loadData() {
@@ -458,14 +484,9 @@ try {
             const s = p[0].split('|');
             
             document.getElementById('s_tot').innerText = s[0];
-            const sec = parseInt(s[1]);
-            const dns = parseInt(s[2]);
-            document.getElementById('s_sec').innerText = sec;
-            document.getElementById('s_dns').innerText = dns;
+            document.getElementById('s_sec').innerText = s[1];
             document.getElementById('s_crit').innerText = s[3];
-
-            myChart.data.datasets[0].data = [sec, dns];
-            myChart.update();
+            document.getElementById('s_active').innerText = s[4];
 
             const fd = document.getElementById('feedArea');
             if (fd.innerHTML.length !== p[1].length) { fd.innerHTML = p[1]; applyFilters(); }
@@ -522,7 +543,6 @@ try {
 </html>
 "@
                 $buffer = [System.Text.Encoding]::UTF8.GetBytes($html)
-                $res.ContentLength64 = $buffer.Length
                 $res.OutputStream.Write($buffer, 0, $buffer.Length)
                 $res.Close()
             }
