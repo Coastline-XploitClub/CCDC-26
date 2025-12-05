@@ -1,5 +1,5 @@
 # =====================================================================
-# BlueShield Dashboard v25.13 (Client/Workstation Edition)
+# BlueShield Dashboard (Client/Workstation Edition)
 # Features:
 #   • OPTIMIZED FOR CLIENTS: No "DNS Server" Role checks
 #   • RDP WATCH: Highlights Remote Desktop (Type 10) connections
@@ -509,4 +509,5 @@ try {
     }
 } finally {
     $listener.Stop(); $listener.Close()
+
 }
