@@ -42,6 +42,328 @@ Write-Host " User: $UserName" -ForegroundColor Yellow
 Write-Host " Groups: Domain Admins + DNSAdmins" -ForegroundColor Yellow
 Write-Host "========================================"
 
+
+
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++
+#     CREATING USERS OUs
+# ======================================================
+# AUTO-DETECT DOMAIN DN (MUST RUN BEFORE ANY OU WORK)
+# ======================================================
+Import-Module ActiveDirectory
+
+try {
+    $DomainDN = (Get-ADDomain).DistinguishedName
+    Write-Host "[OK] Detected domain: $DomainDN" -ForegroundColor Green
+}
+catch {
+    Write-Host "[ERROR] Unable to detect domain. Is this machine domain-joined?" -ForegroundColor Red
+    exit
+}
+
+Write-Host "`n=== TEST 1: ADMIN ACCOUNT ORGANIZATION (AUTO-DOMAIN + HIGH PRIV BUILT-IN) ===" -ForegroundColor Cyan
+
+# ======================================================
+# DEFINE OU PATHS USING AUTO-DOMAIN
+# ======================================================
+$AdminOU = "OU=Admin_Accounts,$DomainDN"
+
+# ======================================================
+# ENSURE Admin_Accounts OU EXISTS
+# ======================================================
+if (-not (Get-ADOrganizationalUnit -LDAPFilter "(ou=Admin_Accounts)" -SearchBase $DomainDN -ErrorAction SilentlyContinue)) {
+    New-ADOrganizationalUnit -Name "Admin_Accounts" -Path $DomainDN
+    Write-Host "[+] Created OU: Admin_Accounts" -ForegroundColor Green
+} else {
+    Write-Host "[OK] OU already exists: Admin_Accounts" -ForegroundColor Cyan
+}
+
+# ======================================================
+# HIGH PRIV GROUP LIST
+# ======================================================
+$ExplicitPrivGroups = @(
+    "Domain Admins",
+    "Enterprise Admins",
+    "Administrators",
+    "Schema Admins",
+    "DNSAdmins",
+    "Backup Operators",
+    "Server Operators",
+    "Account Operators",
+    "Print Operators",
+    "Cert Publishers",
+    "RAS and IAS Servers",
+    "Group Policy Creator Owners",
+    "Hyper-V Administrators"
+)
+
+# EXCLUDED ACCOUNTS
+$ExcludeUsers = @("Administrator", "krbtgt")
+
+Write-Host "`n[+] Scanning domain for admin-level users..." -ForegroundColor Yellow
+
+# ======================================================
+# ENUMERATE USERS
+# ======================================================
+$AllUsers = Get-ADUser -Filter * -Properties memberOf, SamAccountName, DistinguishedName
+
+foreach ($user in $AllUsers) {
+
+    # Skip excluded accounts
+    if ($ExcludeUsers -contains $user.SamAccountName) { continue }
+    if ($user.SamAccountName -match "svc|sql|admin") { continue }
+
+    $UserGroups = @()
+
+    if ($user.memberOf) {
+        $UserGroups = $user.memberOf | ForEach-Object { (Get-ADGroup $_).Name }
+    }
+
+    $IsAdmin = $false
+
+    # 1. Check explicit admin groups
+    foreach ($grp in $ExplicitPrivGroups) {
+        if ($UserGroups -contains $grp) {
+            $IsAdmin = $true
+            break
+        }
+    }
+
+    # 2. Pattern-match (covers custom high-privilege groups)
+    if (-not $IsAdmin) {
+        foreach ($grp in $UserGroups) {
+            if ($grp -match "admin|operator|dns|schema|backup|server") {
+                $IsAdmin = $true
+                break
+            }
+        }
+    }
+
+    # MOVE ADMIN USERS
+    if ($IsAdmin) {
+        Write-Host "[ADMIN] $($user.SamAccountName) → Admin_Accounts" -ForegroundColor Green
+
+        Move-ADObject -Identity $user.DistinguishedName -TargetPath $AdminOU -ErrorAction SilentlyContinue
+    }
+}
+
+Write-Host "`n[✓] TEST 1 COMPLETE — High-privilege users moved." -ForegroundColor Cyan
+
+Write-Host "`n=== MULTIPLE GROUP ACCOUNT ORGANIZATION (AUTO-DOMAIN + SMART CREATION) ===" -ForegroundColor Cyan
+
+
+
+# ======================================================
+# DEFINE TARGET OUs
+# ======================================================
+$MultiOU = "OU=Multiple_Group_Accounts,$DomainDN"
+$AdminOU = "OU=Admin_Accounts,$DomainDN"
+
+# ======================================================
+# LOGIC SETTINGS
+# ======================================================
+$IgnoreGroups = @("Domain Users", "Authenticated Users")
+$ExcludeUsers = @("Administrator", "krbtgt")
+
+# Flag to track whether any multi-group users exist
+$FoundMultiGroupUsers = $false
+
+Write-Host "`n[+] Scanning for MULTIPLE meaningful group users..." -ForegroundColor Yellow
+
+# ======================================================
+# ENUMERATE USERS
+# ======================================================
+$AllUsers = Get-ADUser -Filter * -Properties memberOf, DistinguishedName, SamAccountName
+
+foreach ($user in $AllUsers) {
+
+    # 1️⃣ Exclude system accounts + service accounts
+    if ($ExcludeUsers -contains $user.SamAccountName) { continue }
+    if ($user.SamAccountName -match "svc|sql|admin") { continue }
+
+    # 2️⃣ Never touch the Admin OU users
+    if ($user.DistinguishedName -like "*OU=Admin_Accounts,*") { continue }
+
+    # 3️⃣ Skip if no groups
+    if (-not $user.memberOf) { continue }
+
+    # Convert groups to names
+    $UserGroups = $user.memberOf | ForEach-Object { (Get-ADGroup $_).Name }
+
+    # Remove ignored groups
+    $MeaningfulGroups = $UserGroups | Where-Object { $IgnoreGroups -notcontains $_ }
+
+    # 4️⃣ MULTIPLE GROUP LOGIC
+    if ($MeaningfulGroups.Count -ge 2) {
+
+        # First time we find one → create OU if not exists
+        if (-not $FoundMultiGroupUsers) {
+
+            if (-not (Get-ADOrganizationalUnit -LDAPFilter "(ou=Multiple_Group_Accounts)" -SearchBase $DomainDN -ErrorAction SilentlyContinue)) {
+                New-ADOrganizationalUnit -Name "Multiple_Group_Accounts" -Path $DomainDN
+                Write-Host "[+] Created OU: Multiple_Group_Accounts" -ForegroundColor Cyan
+            } else {
+                Write-Host "[OK] OU already exists: Multiple_Group_Accounts" -ForegroundColor Green
+            }
+
+            $FoundMultiGroupUsers = $true
+        }
+
+        Write-Host "[MULTI] $($user.SamAccountName) → Multiple_Group_Accounts" -ForegroundColor Magenta
+        Write-Host "       Groups: $($MeaningfulGroups -join ', ')" -ForegroundColor DarkGray
+
+        Move-ADObject -Identity $user.DistinguishedName -TargetPath $MultiOU -ErrorAction SilentlyContinue
+    }
+}
+
+# ======================================================
+# FINAL SUMMARY MESSAGE
+# ======================================================
+if (-not $FoundMultiGroupUsers) {
+    Write-Host "`n[INFO] No users belong to multiple meaningful groups. No OU was created." -ForegroundColor Yellow
+} else {
+    Write-Host "`n[✓] Multi-group users processed and moved." -ForegroundColor Cyan
+}
+
+Write-Host "`n=== SINGLE-GROUP OU ORGANIZATION (AUTO-DOMAIN + CLEAN) ===" -ForegroundColor Cyan
+
+
+
+# ======================================================
+# DEFINE IMPORTANT OUs
+# ======================================================
+$AdminOU   = "OU=Admin_Accounts,$DomainDN"
+$MultiOU   = "OU=Multiple_Group_Accounts,$DomainDN"
+
+# ======================================================
+# LOGIC RULES
+# ======================================================
+$IgnoreGroups = @("Domain Users", "Authenticated Users")
+$ExcludeUsers = @("Administrator", "Guest", "krbtgt", "DefaultAccount")
+
+Write-Host "`n[+] Scanning for SINGLE meaningful group users..." -ForegroundColor Yellow
+
+# ======================================================
+# ENUMERATE USERS
+# ======================================================
+$AllUsers = Get-ADUser -Filter * -Properties memberOf, DistinguishedName, SamAccountName
+
+foreach ($user in $AllUsers) {
+
+    # 1️⃣ Explicitly Skip DefaultAccount (Checks Name, ID, and DN to be 100% sure)
+    if ($user.Name -eq "DefaultAccount" -or $user.SamAccountName -match "DefaultAccount" -or $user.DistinguishedName -like "*CN=DefaultAccount,*") { 
+        Write-Host "[SKIP] Ignoring built-in account: $($user.Name)" -ForegroundColor DarkGray
+        continue 
+    }
+
+    # 2️⃣ Skip excluded built-in accounts (from your list)
+    if ($ExcludeUsers -contains $user.SamAccountName) { continue }
+
+    # 3️⃣ Skip Service Accounts (svc, sql, admin)
+    if ($user.SamAccountName -match "svc|sql|admin") { continue }
+
+    # 4️⃣ Skip Admin OU
+    if ($user.DistinguishedName -like "*OU=Admin_Accounts,*") { continue }
+
+    # 4️⃣ Skip Multiple Group OU
+    if ($user.DistinguishedName -like "*OU=Multiple_Group_Accounts,*") { continue }
+
+    # 5️⃣ Must have groups
+    if (-not $user.memberOf) { continue }
+
+    # Get Group Names
+    $UserGroups = $user.memberOf | ForEach-Object { (Get-ADGroup $_).Name }
+
+    # Filter meaningful groups AND force it to be an array using @()
+    $MeaningfulGroups = @($UserGroups | Where-Object { $IgnoreGroups -notcontains $_ })
+
+    # 6️⃣ EXACTLY ONE meaningful group → Create OU for that group
+    if ($MeaningfulGroups.Count -eq 1) {
+
+        # Extract group name
+        $GroupName = $MeaningfulGroups[0]
+
+        # Sanitize OU name
+        $CleanOUName = ($GroupName -replace '[\/\[\]:;|=,+*?<>]', '').Trim()
+
+        $TargetOU = "OU=$CleanOUName,$DomainDN"
+
+        # Create the OU if missing
+        if (-not (Get-ADOrganizationalUnit -LDAPFilter "(ou=$CleanOUName)" -SearchBase $DomainDN -ErrorAction SilentlyContinue)) {
+            try {
+                New-ADOrganizationalUnit -Name $CleanOUName -Path $DomainDN
+                Write-Host "[+] Created OU: $CleanOUName" -ForegroundColor Cyan
+            }
+            catch {
+                Write-Host "[ERROR] Failed to create OU for group $CleanOUName" -ForegroundColor Red
+                continue
+            }
+        }
+
+        # Move user to the OU
+        Write-Host "[SINGLE] $($user.SamAccountName) → $GroupName" -ForegroundColor Green
+        Move-ADObject -Identity $user.DistinguishedName -TargetPath $TargetOU -ErrorAction SilentlyContinue
+    }
+}
+
+Write-Host "`n[✓] Single-group OU processing complete." -ForegroundColor Cyan
+
+Write-Host "`n=== REGULAR ACCOUNTS ORGANIZATION (PRIMARY GROUP LOGIC) ===" -ForegroundColor Cyan
+
+# OU PATHS
+$AdminOU   = "OU=Admin_Accounts,$DomainDN"
+$MultiOU   = "OU=Multiple_Group_Accounts,$DomainDN"
+$RegularOU = "OU=Regular_Accounts,$DomainDN"
+
+$ExcludeUsers = @("Administrator", "Guest", "krbtgt", "DefaultAccount")
+
+Write-Host "`n[+] Scanning for TRUE regular users (PrimaryGroupID = 513 and NO other groups)..." -ForegroundColor Yellow
+
+$FoundRegular = $false
+
+# GET USERS INCLUDING PRIMARY GROUP ID
+$AllUsers = Get-ADUser -Filter * -Properties memberOf, DistinguishedName, SamAccountName, PrimaryGroupID
+
+foreach ($user in $AllUsers) {
+
+    # Skip built-in and svc accounts
+    if ($ExcludeUsers -contains $user.SamAccountName) { continue }
+    if ($user.SamAccountName -match "svc|sql|admin") { continue }
+
+    # Skip if already sorted
+    if ($user.DistinguishedName -like "*OU=Admin_Accounts,*") { continue }
+    if ($user.DistinguishedName -like "*OU=Multiple_Group_Accounts,*") { continue }
+
+    # Skip letter OUs
+    $OUName = ($user.DistinguishedName -split ',')[0] -replace "^OU=", ""
+    if ($OUName.Length -eq 1) { continue }
+
+    # TRUE REGULAR USER DETECTION:
+    # PrimaryGroupID = 513 (Domain Users)
+    # AND memberOf is empty or 0
+    if ($user.PrimaryGroupID -eq 513 -and ($user.memberOf -eq $null -or $user.memberOf.Count -eq 0)) {
+
+        # Create OU once
+        if (-not $FoundRegular) {
+            if (-not (Get-ADOrganizationalUnit -LDAPFilter "(ou=Regular_Accounts)" -SearchBase $DomainDN -ErrorAction SilentlyContinue)) {
+                New-ADOrganizationalUnit -Name "Regular_Accounts" -Path $DomainDN
+                Write-Host "[+] Created OU: Regular_Accounts" -ForegroundColor Cyan
+            } else {
+                Write-Host "[OK] OU already exists: Regular_Accounts" -ForegroundColor Green
+            }
+            $FoundRegular = $true
+        }
+
+        Write-Host "[REGULAR] $($user.SamAccountName) → Regular_Accounts" -ForegroundColor White
+        Move-ADObject -Identity $user.DistinguishedName -TargetPath $RegularOU -ErrorAction SilentlyContinue
+    }
+}
+
+if (-not $FoundRegular) {
+    Write-Host "`n[INFO] No TRUE regular users found (PrimaryGroupID = 513 only)." -ForegroundColor Yellow
+} else {
+    Write-Host "`n[✓] Regular users processed and moved to Regular_Accounts." -ForegroundColor Cyan
+}
+
 # ======================================================================
 #   DNS HARDENING SCRIPT – Windows Server 2016 (NO DNSSEC)
 #   Author: Cesar
@@ -91,7 +413,6 @@ else {
     $ZoneName = $zones[$selection - 1].ZoneName
     Write-Host "[OK] Selected DNS Zone: $ZoneName" -ForegroundColor Green
 }
-
 
 
 # ------------------------------------------------------
@@ -279,7 +600,7 @@ if ($AutoDC_IP) {
 # If user declined or auto-detect failed → manual entry
 if (-not $DC_IP) {
 
-    $DC_IP = Read-Host "Enter the Domain Controller IP address (example: 192.168.220.12)"
+    $DC_IP = Read-Host "Enter the Domain Controller IP address (example: 192.168.220.25)"
 
     if (-not $DC_IP) {
         Write-Host "[ERROR] IP cannot be empty." -ForegroundColor Red
@@ -308,14 +629,53 @@ if (-not $DC_IP) {
     Write-Host "[OK] Domain Controller validated successfully." -ForegroundColor Green
 }
 
-# APPLY DNS SETTINGS
-Write-Host "  → Setting DNS servers to: $DC_IP and 127.0.0.1" -ForegroundColor Cyan
-Set-DnsClientServerAddress -InterfaceAlias "Ethernet 2" -ServerAddresses ($DC_IP, "127.0.0.1")
+# ==========================================================
+#  APPLY DNS SETTINGS (CROSS-VERSION NIC AUTO-DETECTION)
+# ==========================================================
+
+Write-Host "`n[0.1] Detecting correct network interface…" -ForegroundColor Cyan
+
+# STEP 1 — Try preferred NIC names (common in CCDC + VMware)
+$PreferredNames = @("Ethernet 2", "Ethernet0", "Ethernet")
+
+$InterfaceAlias = $null
+
+foreach ($name in $PreferredNames) {
+    $nic = Get-NetAdapter -Name $name -ErrorAction SilentlyContinue
+    if ($nic -and $nic.Status -eq "Up") {
+        $InterfaceAlias = $name
+        Write-Host "  → Using detected preferred NIC: $InterfaceAlias" -ForegroundColor Green
+        break
+    }
+}
+
+# STEP 2 — If preferred NIC not found, auto-detect best hardware NIC
+if (-not $InterfaceAlias) {
+    Write-Host "  → Preferred NICs not found. Auto-detecting NIC…" -ForegroundColor Yellow
+
+    $nic = Get-NetAdapter |
+           Where-Object { $_.Status -eq "Up" -and $_.HardwareInterface -eq $true } |
+           Sort-Object -Property InterfaceMetric |
+           Select-Object -First 1
+
+    if ($nic) {
+        $InterfaceAlias = $nic.Name
+        Write-Host "  → Auto-selected NIC: $InterfaceAlias" -ForegroundColor Green
+    }
+    else {
+        Write-Host "[ERROR] No active network interface found!" -ForegroundColor Red
+        exit
+    }
+}
+
+# STEP 3 — Apply DNS configuration
+Write-Host "  → Setting DNS servers to: $DC_IP and 127.0.0.1 on '$InterfaceAlias'" -ForegroundColor Cyan
+Set-DnsClientServerAddress -InterfaceAlias $InterfaceAlias -ServerAddresses ($DC_IP, "127.0.0.1")
 
 Write-Host "  → Applying DNS suffix: $DomainName" -ForegroundColor Cyan
-Set-DnsClient -InterfaceAlias "Ethernet 2" -ConnectionSpecificSuffix $DomainName
+Set-DnsClient -InterfaceAlias $InterfaceAlias -ConnectionSpecificSuffix $DomainName
 
-# Cleanup DNS
+# STEP 4 — Cleanup and register DNS
 ipconfig /flushdns    | Out-Null
 ipconfig /registerdns | Out-Null
 
@@ -441,6 +801,83 @@ Write-Host "[OK] Local Firewall Logging Enabled (No GPO → No MMC crash)" -Fore
 # Show active logging configuration
 netsh advfirewall firewall show logging
 
+# ==========================================================
+# SECTION 0.8 – DISABLE WINDOWS UPDATE COMPLETELY (GPO)
+# ==========================================================
+
+Write-Host "`n[0.8] Disabling Windows Update Completely..." -ForegroundColor Yellow
+
+$WUKey = "HKLM\Software\Policies\Microsoft\Windows\WindowsUpdate\AU"
+
+# Disable Automatic Updates
+Set-GPRegistryValue -Name $GpoName -Key $WUKey -ValueName "NoAutoUpdate" -Type DWord -Value 1
+
+# Disable scheduled updates
+Set-GPRegistryValue -Name $GpoName -Key $WUKey -ValueName "AUOptions" -Type DWord -Value 1
+
+# Disable detection frequency
+Set-GPRegistryValue -Name $GpoName -Key $WUKey -ValueName "DetectionFrequencyEnabled" -Type DWord -Value 0
+
+# Disable notifications
+Set-GPRegistryValue -Name $GpoName -Key $WUKey -ValueName "NoAutoRebootWithLoggedOnUsers" -Type DWord -Value 1
+
+# Disable update service interaction
+Set-GPRegistryValue -Name $GpoName -Key $WUKey -ValueName "UseWUServer" -Type DWord -Value 0
+
+# Turn off Windows Update service startup (via GPO)
+$SVKey = "HKLM\Software\Policies\Microsoft\Windows\WindowsUpdate"
+Set-GPRegistryValue -Name $GpoName -Key $SVKey -ValueName "DisableWindowsUpdateAccess" -Type DWord -Value 1
+
+Write-Host "[OK] Windows Update Fully Disabled." -ForegroundColor Green
+
+# ==========================================================
+# SECTION 0.9 – ENABLE + HARDEN WINDOWS DEFENDER (BEST PRACTICES)
+# ==========================================================
+
+Write-Host "`n[0.9] Enforcing Windows Defender Security Baseline..." -ForegroundColor Yellow
+
+$DefBase = "HKLM\Software\Policies\Microsoft\Windows Defender"
+$RealTime = "$DefBase\Real-Time Protection"
+$Spynet = "$DefBase\Spynet"
+$ASR = "$DefBase\Windows Defender Exploit Guard\ASR\Rules"
+$NP = "$DefBase\Windows Defender Exploit Guard\Network Protection"
+
+# --- Enable Windows Defender Core Engine ---
+Set-GPRegistryValue -Name $GpoName -Key $DefBase -ValueName "DisableAntiSpyware" -Type DWord -Value 0
+
+# --- Enable Real-Time Protection ---
+Set-GPRegistryValue -Name $GpoName -Key $RealTime -ValueName "DisableRealtimeMonitoring" -Type DWord -Value 0
+Set-GPRegistryValue -Name $GpoName -Key $RealTime -ValueName "DisableBehaviorMonitoring" -Type DWord -Value 0
+Set-GPRegistryValue -Name $GpoName -Key $RealTime -ValueName "DisableIOAVProtection" -Type DWord -Value 0
+
+# --- Ensure Defender Can Remediate Threats (fixes DisableRoutinelyTakingAction issue) ---
+Set-GPRegistryValue -Name $GpoName `
+    -Key $DefBase `
+    -ValueName "DisableRoutinelyTakingAction" `
+    -Type DWord -Value 0
+
+Write-Host "  ✔ Defender remediation enabled (DisableRoutinelyTakingAction = 0)" -ForegroundColor Green
+
+# --- Enable Cloud Protection ---
+Set-GPRegistryValue -Name $GpoName -Key $Spynet -ValueName "SubmitSamplesConsent" -Type DWord -Value 1
+Set-GPRegistryValue -Name $GpoName -Key $Spynet -ValueName "SpynetReporting" -Type DWord -Value 2
+
+# --- Enable Network Protection (blocks malicious outbound connections) ---
+Set-GPRegistryValue -Name $GpoName -Key $NP -ValueName "EnableNetworkProtection" -Type DWord -Value 1
+
+# --- Attack Surface Reduction (ASR) Rules – Maximum Security ---
+$ASRRules = @{
+    "BE9BA2D9-53EA-4CDC-84E5-9B1EEEE46550" = 1; # Block executable content from email/phishing
+    "D4F940AB-401B-4EfC-AADC-AD5F3C50688A" = 1; # Block Office child processes
+    "3B576869-A4EC-4529-8536-B80A7769E899" = 1; # Block Office exec content
+    "75668C1F-73B5-4CF0-BB93-3ECF5CB7CC84" = 1; # Block ransomware-like behavior
+}
+
+foreach ($rule in $ASRRules.Keys) {
+    Set-GPRegistryValue -Name $GpoName -Key $ASR -ValueName $rule -Type DWord -Value $ASRRules[$rule]
+}
+
+Write-Host "[OK] Windows Defender Security Baseline Applied." -ForegroundColor Green
 
 # ==========================================================
 #  SECTION 1 – VARIABLES
@@ -448,25 +885,28 @@ netsh advfirewall firewall show logging
 $NetworkScope = "192.168.220.0/24"
 
 $Machines = @{
-    "PC2"    = "192.168.220.20"
-    "PC3"    = "192.168.220.37"
-    "Linux1" = "192.168.220.2"
-    "Linux2" = "192.168.220.70"
-    "Linux3" = "192.168.220.76"
-    "Linux4" = "192.168.220.103"
-    "Linux5" = "192.168.220.104"
-    "Linux6" = "192.168.220.170"
+    "miata"    = "192.168.220.2"
+    "skyline"    = "192.168.220.30"
+    "solstice" = "192.168.220.60"
+    "sky" = "192.168.220.63"
+    "supra" = "192.168.220.79"
+    "delorean" = "192.168.220.88"
+    "pinto" = "192.168.220.180"
+    "ptcruiser" = "192.168.220.200"
+    "explorer" = "192.168.220.240"
+    "superDuty" = "192.168.220.250"
 }
 
-# Network-level AD ports
-$NetworkPortsTCP = @(88,389,636, 464,3268,3269)
-$NetworkPortsUDP = @(88,389, 464)
+# Network-level ports (Kerberos/LDAP)
+$NetworkPortsTCP = @(88,389,636,464,3268,3269)
+$NetworkPortsUDP = @(88,389,464)
 
-# Per-machine ports
-$StrictTcpPorts = @(22,53,135,139,445)
-$StrictUdpPorts = @(53)
+# Machine-specific strict ports
+# DNS removed because now globally allowed
+$StrictTcpPorts = @(22,135,139,445)
+$StrictUdpPorts = @()
 
-# RPC Dynamic ports
+# RPC dynamic ports range
 $DynStart = 49152
 $DynEnd   = 65535
 
@@ -543,6 +983,38 @@ New-NetFirewallRule `
     -ErrorAction SilentlyContinue | Out-Null
 
 Write-Host "[OK] NTP Rule Applied (UDP 123)" -ForegroundColor Green
+
+# ==========================================================
+#  SECTION 2.85 – ALLOW DNS (TCP/UDP 53) FROM ANY IP
+# ==========================================================
+Write-Host "`n[2.85] Applying Global DNS Access Rules (TCP/UDP 53 from ANY IP)..." -ForegroundColor Yellow
+
+# Allow DNS over UDP (normal queries)
+New-NetFirewallRule `
+    -DisplayName "Allow DNS UDP 53 (Global)" `
+    -Direction Inbound `
+    -Protocol UDP `
+    -LocalPort 53 `
+    -RemoteAddress Any `
+    -Action Allow `
+    -Profile Domain `
+    -PolicyStore $PolicyStore `
+    -ErrorAction SilentlyContinue | Out-Null
+
+# Allow DNS over TCP (large queries, zone transfers if enabled)
+New-NetFirewallRule `
+    -DisplayName "Allow DNS TCP 53 (Global)" `
+    -Direction Inbound `
+    -Protocol TCP `
+    -LocalPort 53 `
+    -RemoteAddress Any `
+    -Action Allow `
+    -Profile Domain `
+    -PolicyStore $PolicyStore `
+    -ErrorAction SilentlyContinue | Out-Null
+
+Write-Host "[OK] Global DNS Rules Applied (TCP/UDP 53 from ANYWHERE)" -ForegroundColor Green
+
 # ==========================================================
 #  SECTION 2.9 – ALLOW ICMP (PING) FOR SCORE ENGINE + HEALTH CHECKS
 # ==========================================================
@@ -723,8 +1195,7 @@ Set-SmbServerConfiguration -EnableSecuritySignature $true -Force
 # Enable SMB encryption (SMB3)
 Set-SmbServerConfiguration -EncryptData $true -Force
 
-# Do NOT disable encryption even on secure connections
-Set-SmbServerConfiguration -DisableSmbEncryptionOnSecureConnection $false -Force
+
 
 Write-Host "[OK] SMB hardened (SMB1 disabled, SMB2/3 enforced, signing + encryption enabled)." -ForegroundColor Green
 
@@ -942,8 +1413,7 @@ Set-SmbServerConfiguration -EnableSecuritySignature $true -Force
 # Enable SMB3 encryption on the server
 Set-SmbServerConfiguration -EncryptData $true -Force
 
-# Enforce encryption even on secure channels
-Set-SmbServerConfiguration -DisableSmbEncryptionOnSecureConnection $false -Force
+
 
 Write-Host "  ✔ SMB hardened (SMB1 disabled, v2/v3 enforced, signing + encryption enabled)" -ForegroundColor Green
 
@@ -1024,6 +1494,50 @@ Set-GPRegistryValue -Name $GpoName -Key "HKLM\System\CurrentControlSet\Services\
 Set-GPRegistryValue -Name $GpoName -Key "HKLM\System\CurrentControlSet\Services\Spooler"  -ValueName "Start" -Type DWord -Value 4
 
 Write-Host "  ✔ Fax, XPS, Print Spooler disabled" -ForegroundColor Green
+
+# --------------------------- Windows Defender Hardening ---------------------------
+Write-Host "`n[5.75] Enforcing Windows Defender Security Baseline..." -ForegroundColor Cyan
+
+$DefBase  = "HKLM\Software\Policies\Microsoft\Windows Defender"
+$RealTime = "$DefBase\Real-Time Protection"
+$Spynet   = "$DefBase\Spynet"
+$ASR      = "$DefBase\Windows Defender Exploit Guard\ASR\Rules"
+$NP       = "$DefBase\Windows Defender Exploit Guard\Network Protection"
+
+# --- Ensure Windows Defender Core is Enabled ---
+Set-GPRegistryValue -Name $GpoName -Key $DefBase -ValueName "DisableAntiSpyware" -Type DWord -Value 0
+
+# --- Enable Real-Time Protection ---
+Set-GPRegistryValue -Name $GpoName -Key $RealTime -ValueName "DisableRealtimeMonitoring" -Type DWord -Value 0
+Set-GPRegistryValue -Name $GpoName -Key $RealTime -ValueName "DisableBehaviorMonitoring" -Type DWord -Value 0
+Set-GPRegistryValue -Name $GpoName -Key $RealTime -ValueName "DisableIOAVProtection" -Type DWord -Value 0
+
+# --- Ensure Defender Can Remediate Threats ---
+Set-GPRegistryValue -Name $GpoName `
+    -Key $DefBase `
+    -ValueName "DisableRoutinelyTakingAction" `
+    -Type DWord -Value 0
+
+# --- Cloud Protection ---
+Set-GPRegistryValue -Name $GpoName -Key $Spynet -ValueName "SubmitSamplesConsent" -Type DWord -Value 1
+Set-GPRegistryValue -Name $GpoName -Key $Spynet -ValueName "SpynetReporting"       -Type DWord -Value 2
+
+# --- Network Protection (Exploit Guard) ---
+Set-GPRegistryValue -Name $GpoName -Key $NP -ValueName "EnableNetworkProtection" -Type DWord -Value 1
+
+# --- Attack Surface Reduction (ASR) Rules ---
+$ASRRules = @{
+    "BE9BA2D9-53EA-4CDC-84E5-9B1EEEE46550" = 1; # Block executable content from email
+    "D4F940AB-401B-4EfC-AADC-AD5F3C50688A" = 1; # Block Office child processes
+    "3B576869-A4EC-4529-8536-B80A7769E899" = 1; # Block Office executable content
+    "75668C1F-73B5-4CF0-BB93-3ECF5CB7CC84" = 1; # Block ransomware-like behavior
+}
+
+foreach ($rule in $ASRRules.Keys) {
+    Set-GPRegistryValue -Name $GpoName -Key $ASR -ValueName $rule -Type DWord -Value $ASRRules[$rule]
+}
+
+Write-Host "  ✔ Windows Defender hardened (RT protection, remediation, cloud, network + ASR)" -ForegroundColor Green
 
 # ==============================================================
 # 6. LINK GPO
