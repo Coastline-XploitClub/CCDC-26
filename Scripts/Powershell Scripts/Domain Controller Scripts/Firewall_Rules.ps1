@@ -680,7 +680,26 @@ ipconfig /flushdns    | Out-Null
 ipconfig /registerdns | Out-Null
 
 # Restart NLA service
-Restart-Service nlasvc -Force
+# NLA service restart (safe version)
+Write-Host "  → Refreshing network profile..." -ForegroundColor Cyan
+
+try {
+    $OS = [Environment]::OSVersion.Version.Major
+
+    # Windows Server 2012 R2 and 2016 (allowed)
+    if ($OS -lt 10) {
+        Restart-Service nlasvc -Force
+        Write-Host "  → NLA restarted successfully." -ForegroundColor Green
+    }
+    # Windows Server 2019 and 2022 (NOT allowed)
+    else {
+        Write-Host "  → Skipping NLA restart (not allowed on Server 2019/2022)" -ForegroundColor Yellow
+    }
+}
+catch {
+    Write-Host "  → Skipping NLA restart — OS prevents stopping netprofm/nlasvc." -ForegroundColor Yellow
+}
+
 Start-Sleep 2
 
 # Check firewall profile
@@ -967,29 +986,30 @@ New-NetFirewallRule `
 Write-Host "[OK] Global RDP Rules Applied (3389 TCP/UDP)" -ForegroundColor Green
 
 # ==========================================================
-#  SECTION 2.8 – ALLOW NTP (UDP 123) FOR TIME SYNC
+#  SECTION 2.8 – ALLOW NTP (UDP 123) FOR TIME SYNC (ANY IP)
 # ==========================================================
 Write-Host "`n[2.8] Applying NTP (UDP 123) Time Synchronization Rule..." -ForegroundColor Yellow
 
 New-NetFirewallRule `
-    -DisplayName "Allow NTP UDP 123 (Time Sync for Clients)" `
+    -DisplayName "Allow NTP UDP 123 (Global - ANY IP)" `
     -Direction Inbound `
     -Protocol UDP `
     -LocalPort 123 `
-    -RemoteAddress $NetworkScope `
+    -RemoteAddress Any `
     -Action Allow `
     -Profile Domain `
     -PolicyStore $PolicyStore `
     -ErrorAction SilentlyContinue | Out-Null
 
-Write-Host "[OK] NTP Rule Applied (UDP 123)" -ForegroundColor Green
+Write-Host "[OK] NTP Rule Applied (UDP 123 - ANY IP)" -ForegroundColor Green
+
 
 # ==========================================================
 #  SECTION 2.85 – ALLOW DNS (TCP/UDP 53) FROM ANY IP
 # ==========================================================
 Write-Host "`n[2.85] Applying Global DNS Access Rules (TCP/UDP 53 from ANY IP)..." -ForegroundColor Yellow
 
-# Allow DNS over UDP (normal queries)
+# DNS over UDP - typical queries
 New-NetFirewallRule `
     -DisplayName "Allow DNS UDP 53 (Global)" `
     -Direction Inbound `
@@ -1001,7 +1021,7 @@ New-NetFirewallRule `
     -PolicyStore $PolicyStore `
     -ErrorAction SilentlyContinue | Out-Null
 
-# Allow DNS over TCP (large queries, zone transfers if enabled)
+# DNS over TCP - large responses, zone transfers (disabled via ACL anyway)
 New-NetFirewallRule `
     -DisplayName "Allow DNS TCP 53 (Global)" `
     -Direction Inbound `
@@ -1013,56 +1033,40 @@ New-NetFirewallRule `
     -PolicyStore $PolicyStore `
     -ErrorAction SilentlyContinue | Out-Null
 
-Write-Host "[OK] Global DNS Rules Applied (TCP/UDP 53 from ANYWHERE)" -ForegroundColor Green
+Write-Host "[OK] Global DNS Rules Applied (TCP/UDP 53 - ANY IP)" -ForegroundColor Green
+
 
 # ==========================================================
-#  SECTION 2.9 – ALLOW ICMP (PING) FOR SCORE ENGINE + HEALTH CHECKS
+#  SECTION 2.9 – ALLOW ICMP (PING) FROM ANY IP
 # ==========================================================
+Write-Host "`n[2.9] Applying ICMP Allow Rules (Ping from ANY IP)..." -ForegroundColor Yellow
 
-Write-Host "`n[2.9] Applying ICMP Allow Rule (Ping)..." -ForegroundColor Yellow
-
+# Echo Request (ping)
 New-NetFirewallRule `
-    -DisplayName "Allow ICMPv4 Echo Request (Ping)" `
+    -DisplayName "Allow ICMPv4 Echo Request (Ping - ANY)" `
     -Direction Inbound `
     -Protocol ICMPv4 `
     -IcmpType 8 `
-    -RemoteAddress $NetworkScope `
+    -RemoteAddress Any `
     -Action Allow `
     -Profile Domain `
     -PolicyStore $PolicyStore `
     -ErrorAction SilentlyContinue | Out-Null
 
+# Echo Reply
 New-NetFirewallRule `
-    -DisplayName "Allow ICMPv4 Echo Reply (Ping)" `
+    -DisplayName "Allow ICMPv4 Echo Reply (Ping - ANY)" `
     -Direction Inbound `
     -Protocol ICMPv4 `
     -IcmpType 0 `
-    -RemoteAddress $NetworkScope `
+    -RemoteAddress Any `
     -Action Allow `
     -Profile Domain `
     -PolicyStore $PolicyStore `
     -ErrorAction SilentlyContinue | Out-Null
 
-Write-Host "[OK] ICMP Rules Applied (Ping Request + Reply)" -ForegroundColor Green
+Write-Host "[OK] ICMP Rules Applied (Ping - ANY IP)" -ForegroundColor Green
 
-# ==========================================================
-#  SECTION 2.95 – ALLOW RPC HIGH PORTS FOR ALL WINDOWS CLIENTS
-#  (Fixes Public Profile, GPO processing, nltest, LDAP, Kerberos)
-# ==========================================================
-Write-Host "`n[2.95] Allowing RPC Dynamic Ports for All Windows Clients..." -ForegroundColor Yellow
-
-New-NetFirewallRule `
-    -DisplayName "Allow RPC High Ports (Windows Clients)" `
-    -Direction Inbound `
-    -Protocol TCP `
-    -LocalPort "$DynStart-$DynEnd" `
-    -RemoteAddress $NetworkScope `
-    -Action Allow `
-    -Profile Domain `
-    -PolicyStore $PolicyStore `
-    -ErrorAction SilentlyContinue | Out-Null
-
-Write-Host "[OK] RPC High Ports Allowed for All Domain Clients" -ForegroundColor Green
 
 # ==========================================================
 #  SECTION 3 – MACHINE-SPECIFIC RULES
@@ -1326,7 +1330,7 @@ $Computers = Get-ADComputer -SearchBase "CN=Computers,$domainDN" -Filter * -Prop
 
 if ($Computers.Count -eq 0) {
     Write-Host "No computer objects found in the Computers container." -ForegroundColor Red
-    exit
+    exit    
 }
 
 foreach ($comp in $Computers) {
