@@ -1,7 +1,6 @@
 # =====================================================================
 #  ACTIVE DIRECTORY USER & COMPUTER ORGANIZATION SCRIPT
 #  Safe for Windows Server 2016 / 2019 / 2022
-#  No user creation | Conditional OU creation | Idempotent
 # =====================================================================
 
 Import-Module ActiveDirectory
@@ -409,6 +408,7 @@ catch {
 ================================================================================
  CREATE GPO TEMPLATES → LINK → SET ORDER
  NOTE: Settings are imported MANUALLY via GPMC
+ SAFE: DC Firewall GPO is CREATED but NOT LINKED
 ================================================================================
 #>
 
@@ -435,7 +435,7 @@ $DomainLevelGPOs = @(
 
 $DomainControllerGPOs = @(
     "GPO - Tier 0 Logon Restrictions",
-    "GPO - DC Firewall Rules",
+    "GPO - DC Firewall Rules",     # ⚠️ CREATED ONLY – NOT LINKED
     "GPO - WinDefender & Updates",
     "GPO - DC Security Hardening"
 )
@@ -480,7 +480,6 @@ function Link-GPO {
     Write-Host "    ↳ Linked ($Order): $Name" -ForegroundColor Cyan
 }
 
-
 # ============================================================
 # DOMAIN LEVEL
 # ============================================================
@@ -498,7 +497,15 @@ foreach ($GPO in $DomainLevelGPOs) {
 Write-Host "`n=== DOMAIN CONTROLLERS GPOS ===" -ForegroundColor Cyan
 $Order = 1
 foreach ($GPO in $DomainControllerGPOs) {
+
     Ensure-GPO $GPO
+
+    # SAFETY: Do NOT auto-link DC Firewall GPO
+    if ($GPO -eq "GPO - DC Firewall Rules") {
+        Write-Host "    ⚠️ Skipping link for: $GPO (safety – empty firewall GPO)" -ForegroundColor Yellow
+        continue
+    }
+
     Link-GPO $GPO $OU_DomainControllers $Order
     $Order++
 }
@@ -514,5 +521,6 @@ foreach ($GPO in $WindowsMachineGPOs) {
     $Order++
 }
 
-Write-Host "`n=== GPO TEMPLATE CREATION + LINKING COMPLETE ===" -ForegroundColor Green
-Write-Host "NEXT STEP: Import settings MANUALLY via GPMC." -ForegroundColor Yellow
+Write-Host "`n=== GPO TEMPLATE CREATION COMPLETE ===" -ForegroundColor Green
+Write-Host "NOTE: 'GPO - DC Firewall Rules' was CREATED but NOT LINKED (intentional)." -ForegroundColor Yellow
+Write-Host "NEXT STEP: Import firewall rules manually, verify RDP/LDAP, then link." -ForegroundColor Yellow
