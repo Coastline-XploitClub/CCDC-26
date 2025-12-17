@@ -628,3 +628,238 @@ try {
 catch {
     Add-Result "Print Spooler" "Error" "Failed to query or modify Print Spooler service" $_.Exception.Message
 }
+
+<#
+==========================================================
+ BlueShield :: DNS Hardening (REMEDIATE ONLY)
+ Safe, idempotent enforcement
+ Supports Windows Server 2016 / 2019 / 2022
+==========================================================
+#>
+
+# ----------------------------------------------------------
+# Helper Output Functions
+# ----------------------------------------------------------
+function Write-Ok   { param($m) Write-Host "[OK]    $m" -ForegroundColor Green }
+function Write-Info { param($m) Write-Host "[INFO]  $m" -ForegroundColor Cyan }
+function Write-Warn { param($m) Write-Host "[WARN]  $m" -ForegroundColor Yellow }
+function Write-Err  { param($m) Write-Host "[ERROR] $m" -ForegroundColor Red }
+
+# ----------------------------------------------------------
+# Result Collector
+# ----------------------------------------------------------
+$global:Results = @()
+
+function Add-Result {
+    param(
+        [string]$Name,
+        [ValidateSet("Secure","Warning","Critical","Error","Skipped")]
+        [string]$Status,
+        [string]$Info,
+        [string]$Value = ""
+    )
+
+    $global:Results += [PSCustomObject]@{
+        Check  = $Name
+        Status = $Status
+        Info   = $Info
+        Value  = $Value
+        Time   = (Get-Date)
+    }
+
+    Write-Host "[$Status] $Name - $Info $Value"
+}
+
+# ----------------------------------------------------------
+# Header
+# ----------------------------------------------------------
+Write-Host "`n========== BlueShield :: DNS Hardening (REMEDIATE) ==========" -ForegroundColor Cyan
+
+# ----------------------------------------------------------
+# Load DNS Module
+# ----------------------------------------------------------
+try {
+    Import-Module DnsServer -ErrorAction Stop
+    Write-Ok "DnsServer module loaded."
+}
+catch {
+    Write-Err "DnsServer module not available. Run on a Domain Controller."
+    return
+}
+
+# ----------------------------------------------------------
+# Detect AD-integrated DNS Zones
+# ----------------------------------------------------------
+Write-Host "`n[DNS-1] Detecting AD-integrated DNS zones..." -ForegroundColor Cyan
+
+$AdZones = Get-DnsServerZone | Where-Object {
+    $_.ZoneType -eq 'Primary' -and
+    $_.IsDsIntegrated -eq $true -and
+    $_.ZoneName -ne 'TrustAnchors'
+}
+
+if (-not $AdZones) {
+    Add-Result "DNS Zones" "Critical" "No AD-integrated DNS zones found"
+    return
+}
+
+# ----------------------------------------------------------
+# DNS-1 Secure Dynamic Updates (ENFORCE)
+# ----------------------------------------------------------
+foreach ($zone in $AdZones) {
+
+    if ($zone.DynamicUpdate -eq 'Secure') {
+        Add-Result "DNS Zone: $($zone.ZoneName)" "Secure" "Secure dynamic updates already enabled"
+        continue
+    }
+
+    try {
+        Set-DnsServerZone -Name $zone.ZoneName -DynamicUpdate Secure
+        Add-Result "DNS Zone: $($zone.ZoneName)" "Secure" "Dynamic updates enforced to Secure"
+    }
+    catch {
+        Add-Result "DNS Zone: $($zone.ZoneName)" "Error" "Failed to enforce dynamic updates" $_.Exception.Message
+    }
+}
+
+# ----------------------------------------------------------
+# DNS-2 Zone Transfers (ENFORCE, AD-SAFE)
+# ----------------------------------------------------------
+Write-Host "`n[DNS-2] Enforcing zone transfer hardening..." -ForegroundColor Cyan
+
+foreach ($zone in $AdZones) {
+    try {
+        dnscmd localhost /ZoneResetSecondaries $zone.ZoneName /NoXfr | Out-Null
+        Add-Result "Zone Transfer: $($zone.ZoneName)" "Secure" "Zone transfers disabled (enforced)"
+    }
+    catch {
+        Add-Result "Zone Transfer: $($zone.ZoneName)" "Error" "Failed to disable zone transfers" $_.Exception.Message
+    }
+}
+
+# ----------------------------------------------------------
+# DNS-3 Recursion (ENFORCE)
+# ----------------------------------------------------------
+Write-Host "`n[DNS-3] Enforcing DNS recursion settings..." -ForegroundColor Cyan
+
+try {
+    $recursion = Get-DnsServerRecursion
+
+    if (-not $recursion.Enable) {
+        Add-Result "DNS Recursion" "Secure" "Recursion already disabled"
+    }
+    else {
+        Set-DnsServerRecursion -Enable $false
+        Add-Result "DNS Recursion" "Secure" "Recursion disabled"
+    }
+}
+catch {
+    Add-Result "DNS Recursion" "Error" "Failed to enforce recursion setting" $_.Exception.Message
+}
+
+# ----------------------------------------------------------
+# DNS-4 Listening Interfaces (AUDIT-ONLY, DC SAFE)
+# ----------------------------------------------------------
+Write-Host "`n[DNS-4] Checking DNS listening interfaces..." -ForegroundColor Cyan
+
+try {
+    $settings = Get-DnsServerSetting
+
+    if ($settings.ListeningIPAddress -and $settings.ListeningIPAddress.Count -gt 0) {
+        Add-Result "DNS Interfaces" "Secure" "Bound to specific IPs" ($settings.ListeningIPAddress -join ', ')
+    }
+    else {
+        Add-Result "DNS Interfaces" "Skipped" "Listening on all interfaces (DC-safe default)"
+    }
+}
+catch {
+    Add-Result "DNS Interfaces" "Error" "Failed to read interface settings" $_.Exception.Message
+}
+
+# ----------------------------------------------------------
+# DNS-5 Cache Locking (ENFORCE ≥ 50%)
+# ----------------------------------------------------------
+Write-Host "`n[DNS-5] Enforcing DNS cache locking..." -ForegroundColor Cyan
+
+try {
+    $cache = Get-DnsServerCache
+
+    if ($cache.LockingPercent -ge 50) {
+        Add-Result "DNS Cache Locking" "Secure" "Already enabled" "Locking=$($cache.LockingPercent)%"
+    }
+    else {
+        Set-DnsServerCache -LockingPercent 50
+        Add-Result "DNS Cache Locking" "Secure" "Cache locking enforced to 50%"
+    }
+}
+catch {
+    Add-Result "DNS Cache Locking" "Error" "Failed to enforce cache locking" $_.Exception.Message
+}
+
+# ----------------------------------------------------------
+# DNS-6 Diagnostic Logging (2016–2022 SAFE)
+# ----------------------------------------------------------
+Write-Host "`n[DNS-6] Enforcing DNS diagnostic logging..." -ForegroundColor Cyan
+
+try {
+    $diag = Get-DnsServerDiagnostics
+
+    if ($diag.Queries -and $diag.Updates) {
+        Add-Result "DNS Logging" "Secure" "Minimal logging already enabled"
+    }
+    else {
+        Set-DnsServerDiagnostics `
+            -Queries $true `
+            -Updates $true `
+            -Notifications $true `
+            -EnableLogFileRollover $true
+
+        Add-Result "DNS Logging" "Secure" "Minimal DNS logging enforced"
+    }
+}
+catch {
+    Add-Result "DNS Logging" "Error" "Failed to enforce DNS logging" $_.Exception.Message
+}
+
+# ----------------------------------------------------------
+# DNS-7 Scavenging (SAFE DEFAULTS)
+# ----------------------------------------------------------
+Write-Host "`n[DNS-7] Enforcing DNS scavenging..." -ForegroundColor Cyan
+
+try {
+    $scav = Get-DnsServerScavenging
+
+    if (-not $scav.ScavengingState) {
+        Set-DnsServerScavenging `
+            -ScavengingState $true `
+            -RefreshInterval 7.00:00:00 `
+            -NoRefreshInterval 7.00:00:00
+
+        foreach ($zone in $AdZones) {
+            Set-DnsServerZoneAging `
+                -Name $zone.ZoneName `
+                -Aging $true `
+                -RefreshInterval 7.00:00:00 `
+                -NoRefreshInterval 7.00:00:00
+        }
+
+        Add-Result "DNS Scavenging" "Secure" "Scavenging enabled with safe defaults"
+    }
+    else {
+        Add-Result "DNS Scavenging" "Secure" "Scavenging already enabled"
+    }
+}
+catch {
+    Add-Result "DNS Scavenging" "Error" "Failed to enforce scavenging" $_.Exception.Message
+}
+
+# ----------------------------------------------------------
+# Summary
+# ----------------------------------------------------------
+Write-Host "`n========== DNS HARDENING SUMMARY ==========" -ForegroundColor Cyan
+
+$Results | Group-Object Status | ForEach-Object {
+    Write-Host ("{0,-10}: {1}" -f $_.Name, $_.Count) -ForegroundColor Cyan
+}
+
+Write-Host "`n========== DNS HARDENING COMPLETE ==========" -ForegroundColor Green
