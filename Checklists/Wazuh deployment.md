@@ -63,3 +63,11 @@ docker compose up -d
 4. Leave all else at default
 5. Copy and run commands provided in wizard
 6. Go back to agent summary page, you should see agents in a couple of mins.
+
+### Agent configuration
+1. Edit the wazuh configuration (`/var/ossec/etc/ossec.conf` on linux, and `C:\Program Files (x86)\ossec-agent\ossec.conf` on Windows)
+2. Ensure `<disabled>` is set to `no`
+3. Change the `<frequency>` value to a short time (starting point is 120 seconds and increase/decrease as necessary)
+4. Change the `<directories>` to add the `realtime="yes"` attribute (ex. `<directories realtime="yes">`
+5. Add additional `<directories>` lines or modify existing as needed (ex. to include web server config files)
+6. Restart wazuh service (linux: `systemctl restart wazuh-agent`, windows: `Restart-Service -Name wazuh`)
