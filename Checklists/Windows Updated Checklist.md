@@ -39,7 +39,7 @@ Windows First 30 minute checklist
 ## 12. Sysmon installation (powershell)
 ## 1. Download
     wget -O Sysmon.zip https://download.sysinternals.com/files/Sysmon.zip
-## 2. unpiz the file
+## 2. unzip the file
     unzip expand-Archive -Path Sysmon.Zip -DestinationPath .\Sysmon
 ## 3. Download the configureation file. SysmonConfig.xml tells Sysmon what is “important enough” to record and what should be ignored so your system stays secure and stable.
     wget -O sysmonconfig.xml https://raw.githubusercontent.com/olafhartong/sysmon-modular/master/sysmonconfig.xml
