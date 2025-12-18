@@ -11,7 +11,7 @@
     b.Check permissions for Groups for Active Directory and Users
 
 ## 3. Check for low-hanging fruit vulnerabilities
-    a. Check for SMBv1, Zerologon, LLMNR, NTLN version, TLS verion
+    a. Check for SMBv1, Zerologon, LLMNR, NTLM version, TLS verion
 
 ## 4. Check group policies 
     a. Local Group Policy Editor by pressing Win + R, typing gpedit.msc
