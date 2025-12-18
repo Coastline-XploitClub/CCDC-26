@@ -43,7 +43,7 @@ Windows First 30 minute checklist
     unzip expand-Archive -Path Sysmon.Zip -DestinationPath .\Sysmon
 ## 3. Download the configureation file. SysmonConfig.xml tells Sysmon what is “important enough” to record and what should be ignored so your system stays secure and stable.
     wget -O sysmonconfig.xml https://raw.githubusercontent.com/olafhartong/sysmon-modular/master/sysmonconfig.xml
-## 4. Move the sysmonconfig.xml to sysmon folder. sysmonconfig.xml and Sysmon.exe have to be in the same folder. 
+## 4. Move the sysmonconfig.xml to sysmon folder. sysmonconfig.xml and Sysmon.exe must be in the same folder. 
     mv sysmonconfig.xml .\sysmon
 ## 5. Run the following command to install sysmon. 
     .\Sysmon.exe -accepteula -i .\sysmonconfig.xml
