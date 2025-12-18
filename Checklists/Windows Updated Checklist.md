@@ -37,8 +37,8 @@ Windows First 30 minute checklist
 11. Explore the services or webapps and how they work
 
 ## 12. Sysmon installation (powershell)
-    a. 
-    wget -O Sysmon.zip https://download.sysinternals.com/files/Sysmon.zip
+## a. 
+      wget -O Sysmon.zip https://download.sysinternals.com/files/Sysmon.zip
     b. unzip expand-Archive -Path Sysmon.Zip -DestinationPath .\Sysmon
     c. wget -O sysmonconfig.xml https://raw.githubusercontent.com/olafhartong/sysmon-modular/master/sysmonconfig.xml
     d. mv sysmonconfig.xml .\sysmon
