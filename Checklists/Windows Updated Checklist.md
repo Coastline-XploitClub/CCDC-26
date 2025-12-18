@@ -37,10 +37,76 @@ Windows First 30 minute checklist
 11. Explore the services or webapps and how they work
 
 ## 12. Sysmon installation (powershell)
-## a. 
-      wget -O Sysmon.zip https://download.sysinternals.com/files/Sysmon.zip
-    b. unzip expand-Archive -Path Sysmon.Zip -DestinationPath .\Sysmon
-    c. wget -O sysmonconfig.xml https://raw.githubusercontent.com/olafhartong/sysmon-modular/master/sysmonconfig.xml
-    d. mv sysmonconfig.xml .\sysmon
-    d. .\Sysmon.exe -accepteula -i .\sysmonconfig.xml
+## 1. Download
+    wget -O Sysmon.zip https://download.sysinternals.com/files/Sysmon.zip
+## 2. unpiz the file
+    unzip expand-Archive -Path Sysmon.Zip -DestinationPath .\Sysmon
+## 3. Download the configureation file. SysmonConfig.xml tells Sysmon what is “important enough” to record and what should be ignored so your system stays secure and stable.
+    wget -O sysmonconfig.xml https://raw.githubusercontent.com/olafhartong/sysmon-modular/master/sysmonconfig.xml
+## 4. Move the sysmonconfig.xml to sysmon folder. sysmonconfig.xml and Sysmon.exe have to be in the same folder. 
+    mv sysmonconfig.xml .\sysmon
+## 5. Run the following command to install sysmon. 
+    .\Sysmon.exe -accepteula -i .\sysmonconfig.xml
+## 6. TOP Sysmon Event IDs FOR HUNTING
+   Event ID 1 – Process Create
 
+  What it shows:
+  A program started.
+
+  Almost everything malicious starts a process.
+
+  What to hunt:
+  cmd.exe, powershell.exe, wscript.exe, mshta.exe
+
+  Processes running from Temp, Downloads, AppData
+  
+  Example red flags:
+          powershell.exe -enc
+          rundll32.exe suspicious.dll
+          cmd.exe /c whoami
+  Event ID 3 – Network Connection
+
+  What it shows:
+  A process opened a network connection.
+
+  Why it’s gold:
+  Shows who is talking to whom and why.
+
+   What to hunt:
+
+  DC talking outbound (very suspicious)
+
+  LDAP (389) abuse
+
+  Beaconing patterns
+
+  Connections to unknown IPs
+
+  Example red flags:
+
+  powershell.exe making outbound connections
+
+  vent ID 7 – Image Load
+
+  Use carefully (noisy)
+
+  What it shows:
+  A DLL was loaded into a process.
+
+  What to hunt (filtered):
+
+  DLLs from Temp/AppData
+
+  Unsigned DLLs
+
+  DLLs loaded into lsass.exe
+
+ Event ID 11 – File Create
+
+  What it shows:
+  A file was created.
+
+  Good for:
+  Dropped payloads
+  Webshells
+  EXEs in Temp folders
