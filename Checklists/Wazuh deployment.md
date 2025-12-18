@@ -50,11 +50,13 @@ cd wazuh-docker/single-node
 ```bash
 docker compose -f generate-indexer-certs.yml run --rm generator
 ```
-4. Deploy the wazuh containers
+4. Change the admin password in `docker-compose.yaml` (or add it as a docker secret which is safer)
+   - If keeping the password in the compose file, then make sure its chmod 600, owned by root, and that access to the `docker` group is MONITORED and CONTROLLED.
+6. Deploy the wazuh containers
 ```bash
 docker compose up -d
 ```
-5. Log in with default credentials to the HTTPS port (443) and change them `admin:SecretPassword`. It may take a couple mins to come up
+6. Log in with default credentials to the HTTPS port (443) and change them `admin:SecretPassword`. It may take a couple mins to come up
 
 ### Deploy agents
 1. In Wazuh, go to **Agent Management > Summary** and create a new deployment
