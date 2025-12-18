@@ -3,7 +3,12 @@
 ## Purpose
 This procedure is to deploy Wazuh on a Debian/Ubuntu-based system using Docker Compose.
 
+
+## Installation 
+
+### Install Docker
 1. Install the Docker keyring
+> Replace `ubuntu` with `debian` if installing on debian
 ```bash
 sudo apt update
 sudo apt install ca-certificates curl
@@ -12,6 +17,7 @@ sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyring
 sudo chmod a+r /etc/apt/keyrings/docker.asc
 ```
 2. Add the docker repostiory to `apt`
+> Replace `ubuntu` with `debian` if installing on debian
 ```bash
 sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
 Types: deb
@@ -25,3 +31,35 @@ EOF
 ```bash
 sudo apt update && sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
+4. Add user to docker group
+```
+sudo usermod -aG docker <user>
+```
+
+### Install Wazuh
+1. Set vm memory mappingg
+```bash
+sysctl -w vm.max_map_count=262144
+```
+2. Clone the git repository
+```bash
+git clone https://github.com/wazuh/wazuh-docker.git -b v4.14.1
+cd wazuh-docker/single-node
+```
+3. Generate the certs
+```bash
+docker compose -f generate-indexer-certs.yml run --rm generator
+```
+4. Deploy the wazuh containers
+```bash
+docker compose up -d
+```
+5. Log in with default credentials to the HTTPS port (443) and change them `admin:SecretPassword`. It may take a couple mins to come up
+
+### Deploy agents
+1. In Wazuh, go to **Agent Management > Summary** and create a new deployment
+2. Use `deb amd64` for debian/ubuntu machines and `rpm amd64` for rpm-based distros for linux, otherwise choose windows installer
+3. Use **IP ADDRESS** of wazuh server for `Server address`
+4. Leave all else at default
+5. Copy and run commands provided in wizard
+6. Go back to agent summary page, you should see agents in a couple of mins.
