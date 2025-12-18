@@ -45,7 +45,8 @@ Windows First 30 minute checklist
     wget -O sysmonconfig.xml https://raw.githubusercontent.com/olafhartong/sysmon-modular/master/sysmonconfig.xml
 ## 4. Move the sysmonconfig.xml to sysmon folder. sysmonconfig.xml and Sysmon.exe must be in the same folder. 
     mv sysmonconfig.xml .\sysmon
-## 5. Run the following command to install sysmon. 
+## 5. You need to be in the Sysmon's folder in order to Run the following command to install sysmon. Use cd sysmon to be there. 
+    cd Sysmom
     .\Sysmon.exe -accepteula -i .\sysmonconfig.xml
 ## 6. TOP Sysmon Event IDs FOR HUNTING
    Event ID 1 – Process Create
