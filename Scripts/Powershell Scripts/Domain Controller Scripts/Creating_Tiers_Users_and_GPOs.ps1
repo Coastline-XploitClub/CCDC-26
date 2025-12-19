@@ -1,6 +1,7 @@
 # =====================================================================
 #  ACTIVE DIRECTORY USER & COMPUTER ORGANIZATION SCRIPT
 #  Safe for Windows Server 2016 / 2019 / 2022
+#  No user creation | Conditional OU creation | Idempotent
 # =====================================================================
 
 Import-Module ActiveDirectory
