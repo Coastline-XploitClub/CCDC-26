@@ -147,7 +147,7 @@ if [ -f /etc/shells ]; then
             case "$shell_name" in
                 sh|dash|ash|tcsh)
                     # These shells typically don't support --version or -v
-  RISK: Relative path detected in /etc/sudoers: ccdcadmin ALL=(root) NOPASSW                    ver="Version flag not supported"
+                    ver="Version flag not supported"
                     ;;
                 tmux)
                     # Tmux uses -V (capital)
