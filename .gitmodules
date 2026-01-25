@@ -1,0 +1,6 @@
+[submodule "misc/pspy"]
+	path = misc/pspy
+	url = https://github.com/DominicBreuker/pspy
+[submodule "misc/LSMS"]
+	path = misc/LSMS
+	url = https://github.com/HyperNova120/LSMS
