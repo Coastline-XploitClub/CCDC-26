@@ -1,28 +1,40 @@
 # =====================================================================
-#  ACTIVE DIRECTORY USER & COMPUTER ORGANIZATION SCRIPT
-#  Safe for Windows Server 2016 / 2019 / 2022
-#  No user creation | Conditional OU creation | Idempotent
+# ACTIVE DIRECTORY USER & COMPUTER ORGANIZATION SCRIPT
+# Safe for Windows Server 2016 / 2019 / 2022
+# No user creation | Conditional OU creation | Idempotent
 # =====================================================================
 
-Import-Module ActiveDirectory
-Import-Module GroupPolicy
+Import-Module ActiveDirectory -ErrorAction Stop
 
 # =====================================================================
-# DOMAIN DETECTION
+# DOMAIN DETECTION (LOCKED)
 # =====================================================================
 try {
-    $DomainDN = (Get-ADDomain).DistinguishedName
+    $DomainDN = (Get-ADDomain -ErrorAction Stop).DistinguishedName
+    if ([string]::IsNullOrWhiteSpace($DomainDN)) { throw "DomainDN is null" }
     Write-Host "[OK] Detected domain: $DomainDN" -ForegroundColor Green
 }
 catch {
-    Write-Host "[ERROR] Unable to detect domain." -ForegroundColor Red
-    exit
+    Write-Error "FATAL: Unable to detect domain. $_"
+    exit 1
 }
 
 # =====================================================================
-# TEST 1 — ADMIN ACCOUNT ORGANIZATION
+# SHARED VARIABLES
 # =====================================================================
-Write-Host "`n=== TEST 1: ADMIN ACCOUNT ORGANIZATION ===" -ForegroundColor Cyan
+$ExcludeUsers = @(
+    "Administrator",
+    "krbtgt",
+    "Guest",
+    "DefaultAccount"
+)
+
+$IgnoreGroups = @(
+    "Domain Users",
+    "Authenticated Users"
+)
+
+$PrivilegedGroupPattern = 'admin|tier|enterprise|schema|dns|operator|backup|server'
 
 $ExplicitPrivGroups = @(
     "Domain Admins","Enterprise Admins","Administrators","Schema Admins",
@@ -31,39 +43,47 @@ $ExplicitPrivGroups = @(
     "Group Policy Creator Owners","Hyper-V Administrators"
 )
 
-$ExcludeUsers = @("Administrator","krbtgt")
+# Pull users ONCE (DN is re-fetched before moves)
+$AllUsers = Get-ADUser -Filter * -Properties SamAccountName,MemberOf
 
-$AllUsers   = Get-ADUser -Filter * -Properties memberOf,SamAccountName,DistinguishedName
-$AdminUsers = @()
+# =====================================================================
+# TEST 1 — ADMIN ACCOUNT ORGANIZATION
+# =====================================================================
+Write-Host "`n=== TEST 1: ADMIN ACCOUNT ORGANIZATION ===" -ForegroundColor Cyan
+
+$AdminOU = "OU=Admin_Accounts,$DomainDN"
+
+if (-not (Get-ADOrganizationalUnit -Filter "Name -eq 'Admin_Accounts'" `
+    -SearchBase $DomainDN -ErrorAction SilentlyContinue)) {
+
+    New-ADOrganizationalUnit -Name "Admin_Accounts" -Path $DomainDN
+    Write-Host "[+] Created OU: Admin_Accounts" -ForegroundColor Green
+}
 
 foreach ($user in $AllUsers) {
 
     if ($ExcludeUsers -contains $user.SamAccountName) { continue }
-    if ($user.SamAccountName -match "svc|sql|admin") { continue }
-    if (-not $user.memberOf) { continue }
+    if (-not $user.MemberOf) { continue }
 
-    $Groups = $user.memberOf | ForEach-Object { (Get-ADGroup $_).Name }
+    $FreshUser = Get-ADUser -Identity $user.SamAccountName `
+        -Properties DistinguishedName,MemberOf -ErrorAction SilentlyContinue
+    if (-not $FreshUser) { continue }
 
-    if ($Groups | Where-Object { $_ -match "admin|operator|dns|schema|backup|server" -or $ExplicitPrivGroups -contains $_ }) {
-        $AdminUsers += $user
-    }
-}
+    if ($FreshUser.DistinguishedName -match 'OU=Tier_') { continue }
 
-if ($AdminUsers.Count -gt 0) {
-
-    $AdminOU = "OU=Admin_Accounts,$DomainDN"
-
-    if (-not (Get-ADOrganizationalUnit -LDAPFilter "(ou=Admin_Accounts)" -SearchBase $DomainDN -ErrorAction SilentlyContinue)) {
-        New-ADOrganizationalUnit -Name "Admin_Accounts" -Path $DomainDN
-        Write-Host "[+] Created OU: Admin_Accounts" -ForegroundColor Green
+    $Groups = $FreshUser.MemberOf | ForEach-Object {
+        (Get-ADGroup $_ -ErrorAction SilentlyContinue).Name
     }
 
-    foreach ($user in $AdminUsers) {
-        Write-Host "[ADMIN] $($user.SamAccountName) → Admin_Accounts" -ForegroundColor Green
-        Move-ADObject -Identity $user.DistinguishedName -TargetPath $AdminOU -ErrorAction SilentlyContinue
+    if ($Groups | Where-Object {
+        $_ -match $PrivilegedGroupPattern -or $ExplicitPrivGroups -contains $_
+    }) {
+        if ($FreshUser.DistinguishedName -notlike "*OU=Admin_Accounts,*") {
+            Move-ADObject -Identity $FreshUser.DistinguishedName `
+                -TargetPath $AdminOU -ErrorAction SilentlyContinue
+            Write-Host "[ADMIN] $($FreshUser.SamAccountName) → Admin_Accounts" -ForegroundColor Green
+        }
     }
-} else {
-    Write-Host "[INFO] No admin users found. Admin_Accounts OU not created." -ForegroundColor Yellow
 }
 
 # =====================================================================
@@ -71,36 +91,38 @@ if ($AdminUsers.Count -gt 0) {
 # =====================================================================
 Write-Host "`n=== MULTIPLE GROUP ACCOUNT ORGANIZATION ===" -ForegroundColor Cyan
 
-$IgnoreGroups = @("Domain Users","Authenticated Users")
-$MultiUsers   = @()
+$MultiOU = "OU=Multiple_Group_Accounts,$DomainDN"
+
+if (-not (Get-ADOrganizationalUnit -Filter "Name -eq 'Multiple_Group_Accounts'" `
+    -SearchBase $DomainDN -ErrorAction SilentlyContinue)) {
+
+    New-ADOrganizationalUnit -Name "Multiple_Group_Accounts" -Path $DomainDN
+    Write-Host "[+] Created OU: Multiple_Group_Accounts" -ForegroundColor Green
+}
 
 foreach ($user in $AllUsers) {
 
     if ($ExcludeUsers -contains $user.SamAccountName) { continue }
-    if ($user.SamAccountName -match "svc|sql|admin") { continue }
-    if ($user.DistinguishedName -like "*OU=Admin_Accounts,*") { continue }
-    if (-not $user.memberOf) { continue }
 
-    $Groups = $user.memberOf | ForEach-Object { (Get-ADGroup $_).Name }
+    $FreshUser = Get-ADUser -Identity $user.SamAccountName `
+        -Properties DistinguishedName,MemberOf -ErrorAction SilentlyContinue
+    if (-not $FreshUser) { continue }
+
+    if ($FreshUser.DistinguishedName -match 'Admin_Accounts|Tier_') { continue }
+    if (-not $FreshUser.MemberOf) { continue }
+
+    $Groups = $FreshUser.MemberOf | ForEach-Object {
+        (Get-ADGroup $_ -ErrorAction SilentlyContinue).Name
+    }
+
     $Meaningful = $Groups | Where-Object { $IgnoreGroups -notcontains $_ }
 
-    if ($Meaningful.Count -ge 2) {
-        $MultiUsers += $user
-    }
-}
+    if ($Meaningful.Count -ge 2 -and
+        $FreshUser.DistinguishedName -notlike "*OU=Multiple_Group_Accounts,*") {
 
-if ($MultiUsers.Count -gt 0) {
-
-    $MultiOU = "OU=Multiple_Group_Accounts,$DomainDN"
-
-    if (-not (Get-ADOrganizationalUnit -LDAPFilter "(ou=Multiple_Group_Accounts)" -SearchBase $DomainDN -ErrorAction SilentlyContinue)) {
-        New-ADOrganizationalUnit -Name "Multiple_Group_Accounts" -Path $DomainDN
-        Write-Host "[+] Created OU: Multiple_Group_Accounts" -ForegroundColor Green
-    }
-
-    foreach ($user in $MultiUsers) {
-        Write-Host "[MULTI] $($user.SamAccountName) → Multiple_Group_Accounts" -ForegroundColor Magenta
-        Move-ADObject -Identity $user.DistinguishedName -TargetPath $MultiOU -ErrorAction SilentlyContinue
+        Move-ADObject -Identity $FreshUser.DistinguishedName `
+            -TargetPath $MultiOU -ErrorAction SilentlyContinue
+        Write-Host "[MULTI] $($FreshUser.SamAccountName) → Multiple_Group_Accounts" -ForegroundColor Magenta
     }
 }
 
@@ -112,27 +134,39 @@ Write-Host "`n=== SINGLE GROUP ACCOUNT ORGANIZATION ===" -ForegroundColor Cyan
 foreach ($user in $AllUsers) {
 
     if ($ExcludeUsers -contains $user.SamAccountName) { continue }
-    if ($user.SamAccountName -match "svc|sql|admin") { continue }
-    if ($user.DistinguishedName -like "*OU=Admin_Accounts,*") { continue }
-    if ($user.DistinguishedName -like "*OU=Multiple_Group_Accounts,*") { continue }
-    if (-not $user.memberOf) { continue }
 
-    $Groups = $user.memberOf | ForEach-Object { (Get-ADGroup $_).Name }
-    $Meaningful = @($Groups | Where-Object { $IgnoreGroups -notcontains $_ })
+    $FreshUser = Get-ADUser -Identity $user.SamAccountName `
+        -Properties DistinguishedName,MemberOf -ErrorAction SilentlyContinue
+    if (-not $FreshUser) { continue }
 
-    if ($Meaningful.Count -eq 1) {
+    if ($FreshUser.DistinguishedName -match 'Admin_Accounts|Multiple_Group_Accounts|Tier_') { continue }
+    if (-not $FreshUser.MemberOf) { continue }
 
-        $OUName = ($Meaningful[0] -replace '[\/\[\]:;|=,+*?<>]', '').Trim()
-        $TargetOU = "OU=$OUName,$DomainDN"
-
-        if (-not (Get-ADOrganizationalUnit -LDAPFilter "(ou=$OUName)" -SearchBase $DomainDN -ErrorAction SilentlyContinue)) {
-            New-ADOrganizationalUnit -Name $OUName -Path $DomainDN
-            Write-Host "[+] Created OU: $OUName" -ForegroundColor Cyan
-        }
-
-        Write-Host "[SINGLE] $($user.SamAccountName) → $OUName" -ForegroundColor Green
-        Move-ADObject -Identity $user.DistinguishedName -TargetPath $TargetOU -ErrorAction SilentlyContinue
+    $Groups = $FreshUser.MemberOf | ForEach-Object {
+        (Get-ADGroup $_ -ErrorAction SilentlyContinue).Name
     }
+
+    $Meaningful = $Groups | Where-Object { $IgnoreGroups -notcontains $_ }
+
+    if ($Meaningful.Count -ne 1) { continue }
+    if ($Meaningful[0] -match $PrivilegedGroupPattern) {
+        Write-Host "[SKIP] Privileged group ($($Meaningful[0]))" -ForegroundColor Yellow
+        continue
+    }
+
+    $OUName = ($Meaningful[0] -replace '[\/\[\]:;|=,+*?<>]', '').Trim()
+    $TargetOU = "OU=$OUName,$DomainDN"
+
+    if (-not (Get-ADOrganizationalUnit -Filter "Name -eq '$OUName'" `
+        -SearchBase $DomainDN -ErrorAction SilentlyContinue)) {
+
+        New-ADOrganizationalUnit -Name $OUName -Path $DomainDN
+        Write-Host "[+] Created OU: $OUName" -ForegroundColor Cyan
+    }
+
+    Move-ADObject -Identity $FreshUser.DistinguishedName `
+        -TargetPath $TargetOU -ErrorAction SilentlyContinue
+    Write-Host "[SINGLE] $($FreshUser.SamAccountName) → $OUName" -ForegroundColor Green
 }
 
 # =====================================================================
@@ -140,31 +174,31 @@ foreach ($user in $AllUsers) {
 # =====================================================================
 Write-Host "`n=== REGULAR ACCOUNT ORGANIZATION ===" -ForegroundColor Cyan
 
-$RegularUsers = @()
+$RegularOU = "OU=Regular_Accounts,$DomainDN"
 
-foreach ($user in (Get-ADUser -Filter * -Properties PrimaryGroupID,memberOf,DistinguishedName,SamAccountName)) {
+if (-not (Get-ADOrganizationalUnit -Filter "Name -eq 'Regular_Accounts'" `
+    -SearchBase $DomainDN -ErrorAction SilentlyContinue)) {
+
+    New-ADOrganizationalUnit -Name "Regular_Accounts" -Path $DomainDN
+    Write-Host "[+] Created OU: Regular_Accounts" -ForegroundColor Green
+}
+
+foreach ($user in Get-ADUser -Filter * `
+    -Properties PrimaryGroupID,MemberOf,DistinguishedName,SamAccountName) {
 
     if ($ExcludeUsers -contains $user.SamAccountName) { continue }
-    if ($user.SamAccountName -match "svc|sql|admin") { continue }
-    if ($user.PrimaryGroupID -eq 513 -and (-not $user.memberOf)) {
-        $RegularUsers += $user
+    if ($user.DistinguishedName -match 'Tier_') { continue }
+
+    if ($user.PrimaryGroupID -eq 513 -and -not $user.MemberOf) {
+        if ($user.DistinguishedName -notlike "*OU=Regular_Accounts,*") {
+            Move-ADObject -Identity $user.DistinguishedName `
+                -TargetPath $RegularOU -ErrorAction SilentlyContinue
+            Write-Host "[REGULAR] $($user.SamAccountName) → Regular_Accounts" -ForegroundColor White
+        }
     }
 }
 
-if ($RegularUsers.Count -gt 0) {
-
-    $RegularOU = "OU=Regular_Accounts,$DomainDN"
-
-    if (-not (Get-ADOrganizationalUnit -LDAPFilter "(ou=Regular_Accounts)" -SearchBase $DomainDN -ErrorAction SilentlyContinue)) {
-        New-ADOrganizationalUnit -Name "Regular_Accounts" -Path $DomainDN
-        Write-Host "[+] Created OU: Regular_Accounts" -ForegroundColor Green
-    }
-
-    foreach ($user in $RegularUsers) {
-        Write-Host "[REGULAR] $($user.SamAccountName) → Regular_Accounts" -ForegroundColor White
-        Move-ADObject -Identity $user.DistinguishedName -TargetPath $RegularOU -ErrorAction SilentlyContinue
-    }
-}
+Write-Host "`n[✓] USER ORGANIZATION COMPLETE" -ForegroundColor Cyan
 
 # =====================================================================
 # COMPUTER ORGANIZATION (WINDOWS / LINUX)
@@ -405,29 +439,36 @@ catch {
     Write-Host "[ERROR] Failed to move Administrator to Tier_0: $_" -ForegroundColor Red
 }
 
-<#
-================================================================================
- CREATE GPO TEMPLATES → LINK → SET ORDER
- NOTE: Settings are imported MANUALLY via GPMC
- SAFE: DC Firewall GPO is CREATED but NOT LINKED
-================================================================================
-#>
-
 Import-Module GroupPolicy -ErrorAction Stop
 Import-Module ActiveDirectory -ErrorAction Stop
 
-# ------------------------------------------------------------
-# DOMAIN / OU VARIABLES
-# ------------------------------------------------------------
-$DomainDN = (Get-ADDomain).DistinguishedName
+# ============================================================
+# MODULES
+# ============================================================
+Import-Module ActiveDirectory -ErrorAction Stop
+Import-Module GroupPolicy    -ErrorAction Stop
 
+# ============================================================
+# DOMAIN / OU VARIABLES
+# ============================================================
+$DomainDN = (Get-ADDomain).DistinguishedName
 $OU_DomainControllers = "OU=Domain Controllers,$DomainDN"
 $OU_WindowsMachines  = "OU=Windows Machines,$DomainDN"
 
-# ------------------------------------------------------------
-# GPO DEFINITIONS (ORDER MATTERS)
-# ------------------------------------------------------------
+# ============================================================
+# ENSURE WINDOWS MACHINES OU EXISTS
+# ============================================================
+if (-not (Get-ADOrganizationalUnit -LDAPFilter "(distinguishedName=$OU_WindowsMachines)" -ErrorAction SilentlyContinue)) {
+    New-ADOrganizationalUnit -Name "Windows Machines" -Path $DomainDN
+    Write-Host "[+] Created OU: Windows Machines" -ForegroundColor Green
+}
+else {
+    Write-Host "[=] OU exists: Windows Machines" -ForegroundColor Yellow
+}
 
+# ============================================================
+# GPO DEFINITIONS
+# ============================================================
 $DomainLevelGPOs = @(
     "GPO - Domain Password Policies",
     "GPO - Domain Account Policies",
@@ -436,9 +477,11 @@ $DomainLevelGPOs = @(
 
 $DomainControllerGPOs = @(
     "GPO - Tier 0 Logon Restrictions",
-    "GPO - DC Firewall Rules",     # ⚠️ CREATED ONLY – NOT LINKED
+    "GPO - DC Firewall Rules",      # CREATED ONLY – NOT LINKED
     "GPO - WinDefender & Updates",
-    "GPO - DC Security Hardening"
+    "GPO - DC Security Hardening",
+    "GPO - DC Audit & Visibility",
+    "GPO - DC Credential Protection"
 )
 
 $WindowsMachineGPOs = @(
@@ -447,24 +490,26 @@ $WindowsMachineGPOs = @(
     "GPO - Windows Firewall Security"
 )
 
-# ------------------------------------------------------------
-# FUNCTION: CREATE GPO IF MISSING
-# ------------------------------------------------------------
+# ============================================================
+# FUNCTION: ENSURE GPO EXISTS (RETURNS TRUE IF EXISTS)
+# ============================================================
 function Ensure-GPO {
     param ([string]$Name)
 
-    if (-not (Get-GPO -Name $Name -ErrorAction SilentlyContinue)) {
-        New-GPO -Name $Name | Out-Null
-        Write-Host "[+] Created GPO: $Name" -ForegroundColor Green
+    if (Get-GPO -Name $Name -ErrorAction SilentlyContinue) {
+        Write-Host "[=] GPO exists, skipping: $Name" -ForegroundColor Yellow
+        return $true
     }
     else {
-        Write-Host "[=] GPO already exists: $Name" -ForegroundColor Yellow
+        New-GPO -Name $Name | Out-Null
+        Write-Host "[+] Created GPO: $Name" -ForegroundColor Green
+        return $false
     }
 }
 
-# ------------------------------------------------------------
-# FUNCTION: LINK + SET ORDER
-# ------------------------------------------------------------
+# ============================================================
+# FUNCTION: LINK GPO
+# ============================================================
 function Link-GPO {
     param (
         [string]$Name,
@@ -472,9 +517,14 @@ function Link-GPO {
         [int]$Order
     )
 
-    $Links = (Get-GPInheritance -Target $Target).GpoLinks.DisplayName
-    if ($Links -notcontains $Name) {
+    $Inheritance = Get-GPInheritance -Target $Target
+    $ExistingLink = $Inheritance.GpoLinks | Where-Object {
+        $_.DisplayName -eq $Name
+    }
+
+    if (-not $ExistingLink) {
         New-GPLink -Name $Name -Target $Target -LinkEnabled Yes | Out-Null
+        Write-Host "    [+] Link created: $Name" -ForegroundColor Green
     }
 
     Set-GPLink -Name $Name -Target $Target -Order $Order -LinkEnabled Yes
@@ -482,46 +532,108 @@ function Link-GPO {
 }
 
 # ============================================================
-# DOMAIN LEVEL
+# FUNCTION: IMPORT GPO IF BACKUP EXISTS (NO GPMC REQUIRED)
+# ============================================================
+function Import-GPOIfBackupExists {
+    param (
+        [string]$BackupName,
+        [string]$TargetName,
+        [string]$BackupPath
+    )
+
+    if (-not (Test-Path $BackupPath)) {
+        Write-Host "    [!] Backup path missing: $BackupPath" -ForegroundColor Yellow
+        return
+    }
+
+    $BackupFolder = Get-ChildItem -Path $BackupPath -Directory -ErrorAction SilentlyContinue |
+        Where-Object {
+            (Test-Path (Join-Path $_.FullName "gpreport.xml")) -and
+            (Select-String -Path (Join-Path $_.FullName "gpreport.xml") `
+                           -SimpleMatch $BackupName `
+                           -Quiet)
+        } | Select-Object -First 1
+
+    if ($BackupFolder) {
+        Import-GPO -BackupGpoName $BackupName `
+                   -TargetName $TargetName `
+                   -Path $BackupPath `
+                   -CreateIfNeeded
+
+        Write-Host "    [+] Imported settings: $BackupName" -ForegroundColor Green
+    }
+    else {
+        Write-Host "    [!] Backup not found, skipping import: $BackupName" -ForegroundColor Yellow
+    }
+}
+
+# ============================================================
+# DOMAIN LEVEL GPOS
 # ============================================================
 Write-Host "`n=== DOMAIN LEVEL GPOS ===" -ForegroundColor Cyan
 $Order = 1
 foreach ($GPO in $DomainLevelGPOs) {
-    Ensure-GPO $GPO
+    if (Ensure-GPO $GPO) { continue }
     Link-GPO $GPO $DomainDN $Order
     $Order++
 }
 
 # ============================================================
-# DOMAIN CONTROLLERS
+# DOMAIN CONTROLLERS GPOS
 # ============================================================
 Write-Host "`n=== DOMAIN CONTROLLERS GPOS ===" -ForegroundColor Cyan
 $Order = 1
 foreach ($GPO in $DomainControllerGPOs) {
+    $Exists = Ensure-GPO $GPO
 
-    Ensure-GPO $GPO
-
-    # SAFETY: Do NOT auto-link DC Firewall GPO
     if ($GPO -eq "GPO - DC Firewall Rules") {
-        Write-Host "    ⚠️ Skipping link for: $GPO (safety – empty firewall GPO)" -ForegroundColor Yellow
+        Write-Host "    ⚠️ Skipping link (intentional): $GPO" -ForegroundColor Yellow
         continue
     }
+
+    if ($Exists) { continue }
 
     Link-GPO $GPO $OU_DomainControllers $Order
     $Order++
 }
 
 # ============================================================
-# WINDOWS MACHINES
+# WINDOWS MACHINES GPOS
 # ============================================================
 Write-Host "`n=== WINDOWS MACHINES GPOS ===" -ForegroundColor Cyan
 $Order = 1
 foreach ($GPO in $WindowsMachineGPOs) {
-    Ensure-GPO $GPO
+    if (Ensure-GPO $GPO) { continue }
     Link-GPO $GPO $OU_WindowsMachines $Order
     $Order++
 }
 
-Write-Host "`n=== GPO TEMPLATE CREATION COMPLETE ===" -ForegroundColor Green
+Write-Host "`n=== GPO CREATION & LINKING COMPLETE ===" -ForegroundColor Green
 Write-Host "NOTE: 'GPO - DC Firewall Rules' was CREATED but NOT LINKED (intentional)." -ForegroundColor Yellow
-Write-Host "NEXT STEP: Import firewall rules manually, verify RDP/LDAP, then link." -ForegroundColor Yellow
+
+# ============================================================
+# GPO SETTINGS IMPORT
+# ============================================================
+$BackupPath = "C:\GPO_Backups"
+
+Write-Host "`n=== IMPORTING GPO SETTINGS (IF BACKUPS EXIST) ===" -ForegroundColor Cyan
+
+# DOMAIN
+Import-GPOIfBackupExists "GPO - Domain Password Policies" "GPO - Domain Password Policies" $BackupPath
+Import-GPOIfBackupExists "GPO - Domain Account Policies"  "GPO - Domain Account Policies"  $BackupPath
+Import-GPOIfBackupExists "GPO - Domain Audit Policies"    "GPO - Domain Audit Policies"    $BackupPath
+
+# DOMAIN CONTROLLERS
+Import-GPOIfBackupExists "GPO - Tier 0 Logon Restrictions" "GPO - Tier 0 Logon Restrictions" $BackupPath
+Import-GPOIfBackupExists "GPO - DC Firewall Rules"         "GPO - DC Firewall Rules"         $BackupPath
+Import-GPOIfBackupExists "GPO - WinDefender & Updates"     "GPO - WinDefender & Updates"     $BackupPath
+Import-GPOIfBackupExists "GPO - DC Security Hardening"     "GPO - DC Security Hardening"     $BackupPath
+Import-GPOIfBackupExists "GPO - DC Audit & Visibility"     "GPO - DC Audit & Visibility"     $BackupPath
+Import-GPOIfBackupExists "GPO - DC Credential Protection"  "GPO - DC Credential Protection"  $BackupPath
+
+# WINDOWS MACHINES
+Import-GPOIfBackupExists "GPO - Tier 2 Logon Restrictions"     "GPO - Tier 2 Logon Restrictions"     $BackupPath
+Import-GPOIfBackupExists "GPO - Tier 2 Local Admin Delegation" "GPO - Tier 2 Local Admin Delegation" $BackupPath
+Import-GPOIfBackupExists "GPO - Windows Firewall Security"     "GPO - Windows Firewall Security"     $BackupPath
+
+Write-Host "`n=== GPO SETTINGS IMPORT COMPLETE ===" -ForegroundColor Green
