@@ -54,6 +54,15 @@ netstat -tunalp
 
 # Get running services
 systemctl --type=service --state=running
+
+# OS and version : use for CVE checks
+cat /etc/os-release
+
+# process tree : Use to identify what to stop since killing a parent can take its children with it.
+ps auxf
+ps auxf > /<path>/processtree.txt #for output
+
+
 ```
 - [ ] Enumeration/understanding of web services and services running (what is their purpose? What does it do? Is it necessary? Can it be abused?)
 
@@ -110,9 +119,13 @@ cp /var/lib/redis/dump.rdb ./redis_backup.rdb
 ```
 - [ ] Stop any obvious unnecessary services. Ensure scored services remain up on scoring engine.
 ```bash
-# Stop/disabling service (systemd)
+# Stop/disabling service (systemd) (Debian, Ubuntu and Fedora)
 systemctl stop <service>
 systemctl disable <service>
+systemctl disable --now <service> # ONE command
+
+# STOPS it being started again by something else
+systemctl mask <service>
 
 # Stop service (SysV Init)
 service <service> stop
@@ -121,6 +134,7 @@ update-rc.d <service-name> disable
 # Stop service (Alpine)
 rc-service <service> stop
 rc-update del <service> default
+
 ```
 - [ ] Evaluate common vulnerabilities (anonymous login, critical/high CVEs, exposed filesystems in file shares, etc.)
 
@@ -166,11 +180,8 @@ for u in /home/* /root; do echo "=== $u/.ssh ==="; grep -R --line-number -E "id_
 - [ ] Terminate suspicious or unnecessary sessions without impacting scoring
 - [ ] Rotate all application and database secrets (submit PCRs where necessary)
 - [ ] Understand startup tasks and scheduled jobs
-```
-Marcel
-```
 
----
+```
 
 ### **4 Sanity check**
 
