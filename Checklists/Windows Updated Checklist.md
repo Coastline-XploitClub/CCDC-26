@@ -8,7 +8,7 @@
 
 ## 2. Audit user accounts/changing permissions
     a. Run  Automatic-Network-Enumeration.ps1 (Location: CCDC-26/Scripts/Powershell Scripts)
-    b.Check permissions for Groups for Active Directory and Users
+    b. It will save in the desktop
 
 ## 3. Check for low-hanging fruit vulnerabilities
     a. Check for SMBv1, Zerologon, LLMNR, NTLM version, TLS version 
