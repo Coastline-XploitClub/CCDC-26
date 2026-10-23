@@ -2,16 +2,17 @@
 
 ## Windows First 30 minute checklist
 
-## 1. Change Default Passwords (Password Change Request)
-    a. Run Cesar’s script 
-    b.Make changes in Active Directory Users and Computers
+## 1. Change Default Passwords for Local Admin (Password Change Request)
+    a. Change password for local root/administrator
+    b. You can use this script (location: CCDC-26/Scripts/Powershell Scripts/Change local password(Optional).ps1)
 
 ## 2. Audit user accounts/changing permissions
-    a. Run  Automatic-Network-Enumeration.ps1
+    a. Run  Automatic-Network-Enumeration.ps1 (Location: CCDC-26/Scripts/Powershell Scripts)
     b.Check permissions for Groups for Active Directory and Users
 
 ## 3. Check for low-hanging fruit vulnerabilities
-    a. Check for SMBv1, Zerologon, LLMNR, NTLM version, TLS verion
+    a. Check for SMBv1, Zerologon, LLMNR, NTLM version, TLS version 
+    b. For smb, use this script. It will detect smb (location: CCDC-26/Scripts/smb-check.ps1)
 
 ## 4. Check group policies 
     a. Local Group Policy Editor by pressing Win + R, typing gpedit.msc
