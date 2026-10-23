@@ -8,6 +8,8 @@
 - [ ] Identify scored services and assign watchers (scoring engine may appear as an unknown user)
 - [ ] Define credential change plan and change order
 - [ ] Prepare inject submission templates and documentation format
+- [ ] Write down the scoring engine source IPs
+- [ ] Create/Edit share sheet list of every box, who is working on it, and credential changes
 
 ---
 
@@ -17,10 +19,22 @@
 - [ ] Change root password for system (`root` never scored)
 ```bash
 # Change any users password
-passwd <username>
+  passwd <username>
 
 # Change root password
-passwd root
+  passwd root
+
+# every UID 0 account (should be only root)
+  awk -F: '$3==0 {print $1}' /etc/passwd
+
+# accounts with a usable shell
+  getent passwd | grep -vE 'nologin|false'
+
+# recent logins
+  last -n 20
+
+# who is on right now                            
+  who ; w                                     
 ```
 - [ ] Record initial host state: hostname, IPs, services, and abnormalities (dump info in team spreadsheet if not already filled)
 > ✅ can use `enumerator.sh` for this! https://github.com/Coastline-XploitClub/CCDC-26/blob/6001824dd56db71ed9d314ffadd6cbb01649f5a1/Scripts/ansible/baseline-role/files/enumerator.sh
