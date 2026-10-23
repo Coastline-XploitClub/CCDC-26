@@ -596,7 +596,7 @@ function Harden-DomainUsersACL {
     Set-ACL -Path "AD:$domainDN" -AclObject $acl
 
     Add-Result "Directory ACL Hardening" "Secure" "Domain Users cannot enumerate AD via LDAP"
-    Write-Host "✓ Domain Users no longer have LDAP enumeration rights." -ForegroundColor Green
+    Write-Host "✓ Domain Users no longer have LDAP enumeration rights." -ForegroundColor Green"
 }
 
 # ----------------------------------------------------------
