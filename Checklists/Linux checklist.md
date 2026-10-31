@@ -92,8 +92,6 @@ docker inspect <container ID>
 # Search for yaml (or .yml) files for docker compose:
 find / \( -iname "*.yaml" -o -iname "*.yml" \)
 
-# Backup docker volumes
-docker run --rm --volumes-from <CONTAINER NAME> -v $(pwd):/backup ubuntu tar cvf /backup/backup.tar /<VOLUME_NAME>
 ```
 - [ ] Backups of all default configuration files and databases
 ```bash
