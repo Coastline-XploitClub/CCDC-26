@@ -1,10 +1,10 @@
 # AD Hardening & Maintenance Checklist
 
-Companion to the First 15 Minutes playbook. Use this for ongoing hardening and account cleanup once the initial lockdown is done. Work top to bottom; tick items off as you go. Document every change with a timestamp so you can tell your changes from the red team's.
+ Use this for ongoing hardening and account cleanup once the initial lockdown is done. Work top to bottom; tick items off as you go. Document every change with a timestamp so you can tell your changes from the red team's.
 
 ## Account audit
 
-Find every account that can log in, then flag anything you did not create. Backdoor accounts are the red team's first move.
+Find every account that can log in, then flag anything you did not create. Check for backdoor accounts. 
 
 - [ ] List all enabled users and scan for names you do not recognize:
 
