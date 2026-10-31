@@ -1,4 +1,4 @@
-# 🛡️ AD Hardening & Maintenance Checklist
+# AD Hardening & Maintenance Checklist
 
 Companion to the First 15 Minutes playbook. Use this for ongoing hardening and account cleanup once the initial lockdown is done. Work top to bottom; tick items off as you go. Document every change with a timestamp so you can tell your changes from the red team's.
 
