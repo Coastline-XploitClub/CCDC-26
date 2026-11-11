@@ -1,0 +1,26 @@
+
+# Monitor Linux user and group changes
+-w /etc/passwd -p wa -k account_changes
+-w /etc/shadow -p wa -k account_changes
+-w /etc/group -p wa -k account_changes
+-w /etc/gshadow -p wa -k account_changes
+
+# Monitor privilege escalation configuration
+-w /etc/sudoers -p wa -k privilege_changes
+-w /etc/sudoers.d/ -p wa -k privilege_changes
+
+# Monitor SSH configuration
+-w /etc/ssh/sshd_config -p wa -k ssh_changes
+
+# Monitor authentication configuration
+-w /etc/pam.d/ -p wa -k authentication_changes
+
+# Monitor scheduled tasks and services
+-w /etc/cron.d/ -p wa -k persistence_changes
+-w /etc/systemd/system/ -p wa -k persistence_changes
+
+# Monitor audit configuration
+-w /etc/audit/ -p wa -k audit_changes
+
+# Monitor sudo execution
+-w /usr/bin/sudo -p x -k sudo_execution
