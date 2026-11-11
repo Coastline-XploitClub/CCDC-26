@@ -81,6 +81,29 @@ ps auxf > /<path>/processtree.txt #for output
   - If anonymous/no-password login
   - Are there domain accounts?
 
+Run Enumerator Script
+LOCATION IN GITHUB IS     CCDC-26/Scripts/Linux Scripts/enumerator_final.sh
+
+  - SCP or download from github the scripts
+  - If home device is a windows device, open powershell and run scp command to transfer over the script.
+
+    SCP command FROM POWERSHELL: scp -r /path/to/local/folder username@VM_IP_ADDRESS:/path/to/vm/destination
+
+    EXAMPLE: scp -r "C:\Linux CCDC" rocky@192.168.220.30:/home/rocky
+
+  - With sudo, chmod so that it is execututable (sudo chmod +x "enumerator_final.sh")
+  - With sudo, execute the script.
+  - Now you can scp it back to plug into AI or cat the files the read whatever information you want.
+
+
+  - If you want to SCP, on powershell run this 
+
+  scp -r username@VM_IP_ADDRESS:/path/to/files/destination /path/to/local/folder
+  
+  Example: scp -r "rocky@192.168.220.30:/home/rocky/Linux CCDC/20261023_010428_enumeration_WEB01" C:\Users\%user%\Downloads
+
+
+
 - [ ] IF you have a docker container, enumerate the container info
 ```bash
 # Get list of running containers
