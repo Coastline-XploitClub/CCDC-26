@@ -13,11 +13,12 @@
 
 ---
 
-### **1 Assessment** (15 minutes MAX)
+# 1 Password change
+
 > ℹ️ Be able to answer "what does your box do?"
 
 - [ ] Change root password for system (`root` never scored)
-```bash
+```bash```
 # Change any users password
   passwd <username>
 
@@ -34,7 +35,36 @@
   last -n 20
 
 # who is on right now                            
-  who ; w                                     
+  who ; w
+
+# 2 Backups
+  Run the backup Script
+
+LOCATION IN GITHUB IS     CCDC-26/Scripts/Linux Scripts/backup.sh
+
+ - If home device is a windows device, open powershell and run scp command to transfer over the script.
+
+    SCP command FROM POWERSHELL: scp -r /path/to/local/folder username@VM_IP_ADDRESS:/path/to/vm/destination
+
+    EXAMPLE: scp -r "C:\Linux CCDC" rocky@192.168.220.30:/home/rocky
+
+  - With sudo, chmod so that it is execututable (sudo chmod +x "backup.sh")
+  - With sudo, execute the script.
+
+  - After it runs:
+  cd var/tmp/.ccdc_backups_
+
+  - If you want to SCP back to your local machine
+  - On powershell run this 
+
+  scp -r username@VM_IP_ADDRESS:/path/to/files/destination /path/to/local/folder
+  
+  Example: scp -r "rocky@192.168.220.30:/home/rocky/Linux CCDC/20261023_010428_enumeration_WEB01" C:\Users\%user%\Downloads
+
+
+
+### **3 Assessment** (15 minutes MAX)
+                               
 ```
 - [ ] Record initial host state: hostname, IPs, services, and abnormalities (dump info in team spreadsheet if not already filled)
 > ✅ can use `enumerator.sh` for this! https://github.com/Coastline-XploitClub/CCDC-26/blob/6001824dd56db71ed9d314ffadd6cbb01649f5a1/Scripts/ansible/baseline-role/files/enumerator.sh
@@ -81,6 +111,7 @@ ps auxf > /<path>/processtree.txt #for output
   - If anonymous/no-password login
   - Are there domain accounts?
 
+
 Run Enumerator Script
 LOCATION IN GITHUB IS     CCDC-26/Scripts/Linux Scripts/enumerator_final.sh
 
@@ -101,6 +132,85 @@ LOCATION IN GITHUB IS     CCDC-26/Scripts/Linux Scripts/enumerator_final.sh
   scp -r username@VM_IP_ADDRESS:/path/to/files/destination /path/to/local/folder
   
   Example: scp -r "rocky@192.168.220.30:/home/rocky/Linux CCDC/20261023_010428_enumeration_WEB01" C:\Users\%user%\Downloads
+
+# 4 Action
+
+```
+- [ ] Stop any obvious unnecessary services. Ensure scored services remain up on scoring engine.
+```bash
+# Stop/disabling service (systemd) (Debian, Ubuntu and Fedora)
+systemctl stop <service>
+systemctl disable <service>
+systemctl disable --now <service> # ONE command
+
+# STOPS it being started again by something else
+systemctl mask <service>
+
+# Stop service (SysV Init)
+service <service> stop
+update-rc.d <service-name> disable
+
+# Stop service (Alpine)
+rc-service <service> stop
+rc-update del <service> default
+
+```
+
+# 6 Enable Auditd
+
+. Install and start auditd
+On Rocky Linux:
+sudo dnf install audit -y
+sudo systemctl enable auditd
+sudo service auditd start
+
+
+On Ubuntu/Debian:
+sudo apt install auditd -y
+sudo systemctl enable auditd
+sudo service auditd start
+
+
+Check the service:
+sudo systemctl status auditd
+
+
+Then check the kernel auditing status:
+sudo auditctl -s
+
+
+You want enabled 1, indicating auditing is active.
+
+Create the rules files
+
+sudo nano /etc/audit/rules.d/50-security.rules
+
+Location of security rules is in 
+
+CCDC-26/Scripts/Linux Scripts/audit security rules
+
+Apply the rules
+Run:
+sudo augenrules --load
+
+
+Then verify:
+sudo auditctl -l
+
+But reading raw audit logs can be confusing. That's why we use ausearch to filter them.
+
+Some examples:
+What you want to investigate	Command
+User account changes	sudo ausearch -k account_changes -i
+SSH configuration changes	sudo ausearch -k ssh_changes -i
+Sudo privilege changes	sudo ausearch -k privilege_changes -i
+Persistence-related changes	sudo ausearch -k persistence_changes -i
+Sudo executions	sudo ausearch -k sudo_execution -i
+
+
+
+FOR RIGHT NOW, IGNORE EVERYTHING BELOW THIS LINE
+
 
 
 
@@ -137,26 +247,7 @@ mongodump --out /path/to/backup/
 redis-cli SAVE
 cp /var/lib/redis/dump.rdb ./redis_backup.rdb
 
-```
-- [ ] Stop any obvious unnecessary services. Ensure scored services remain up on scoring engine.
-```bash
-# Stop/disabling service (systemd) (Debian, Ubuntu and Fedora)
-systemctl stop <service>
-systemctl disable <service>
-systemctl disable --now <service> # ONE command
 
-# STOPS it being started again by something else
-systemctl mask <service>
-
-# Stop service (SysV Init)
-service <service> stop
-update-rc.d <service-name> disable
-
-# Stop service (Alpine)
-rc-service <service> stop
-rc-update del <service> default
-
-```
 - [ ] Evaluate common vulnerabilities (anonymous login, critical/high CVEs, exposed filesystems in file shares, etc.)
 
 - Check version of service running, and cross-check with release notes (look for security patches in later updates), or search for CVEs for service.
