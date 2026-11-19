@@ -1,0 +1,229 @@
+THIS IS ONLY IF MANUAL BACKUP IS THE OPTION.  OTHERWISE, USE THE SCRIPT backup.sh TO BACKUP
+
+# CCDC Linux Backup Commands
+
+## Setup
+
+```bash
+sudo -i
+BACKUP_DIR="/var/tmp/ccdc_backup_$(date +%Y%m%d_%H%M%S)"
+mkdir -m 700 "$BACKUP_DIR"
+cd "$BACKUP_DIR"
+umask 077
+```
+
+## 1. System Configurations
+
+```bash
+tar --acls --xattrs --selinux -cpf etc.tar /etc
+```
+
+## 2. Databases
+
+### MySQL
+```bash
+mysqldump -u root -p --all-databases --single-transaction --routines --events --triggers > mysql.sql
+```
+
+### MariaDB
+```bash
+mariadb-dump -u root -p --all-databases --single-transaction --routines --events --triggers > mariadb.sql
+```
+
+### PostgreSQL
+```bash
+sudo -u postgres pg_dumpall > postgres.sql
+```
+
+## 3. Website and Application Files
+
+```bash
+tar -cpf www.tar /var/www
+tar -cpf opt.tar /opt
+tar -cpf srv.tar /srv
+```
+
+Only back up directories that exist.
+
+## 4. Users, Passwords and Groups
+
+```bash
+tar -cpf users.tar /etc/passwd /etc/shadow /etc/group /etc/gshadow
+```
+
+## 5. SSH Configuration
+
+```bash
+tar -cpf ssh.tar /etc/ssh
+```
+
+## 6. Cron Jobs
+
+```bash
+tar -cpf cron.tar /var/spool/cron /etc/cron*
+```
+
+## 7. Firewall
+
+### Firewalld
+```bash
+tar -cpf firewall.tar /etc/firewalld
+```
+
+### iptables
+```bash
+iptables-save > iptables.rules
+```
+
+## 8. Systemd Services and Timers
+
+```bash
+tar -cpf systemd.tar /etc/systemd/system
+```
+
+## 9. Home Directories and SSH Keys
+
+```bash
+tar --acls --xattrs --selinux --exclude='home/rocky/recovery' -cpf home.tar -C / home root
+```
+
+## 10. Sudo Permissions
+
+```bash
+tar -cpf sudo.tar /etc/sudoers /etc/sudoers.d
+```
+
+## Secure Backup Files
+
+```bash
+chown root:rocky .
+chmod 750 .
+find . -maxdepth 1 -type f -exec chown root:rocky {} \;
+find . -maxdepth 1 -type f -exec chmod 640 {} \;
+find . -maxdepth 1 -type f -exec chattr +i {} \;
+```
+
+-------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------
+
+
+Restore Commands 
+
+# CCDC Linux Restore Commands
+
+Run as root from inside the backup directory.
+
+## 1. System Configurations
+
+```bash
+tar --acls --xattrs --selinux -xpf etc.tar -C /
+```
+
+## 2. Databases
+
+### MySQL
+```bash
+mysql -u root -p < mysql.sql
+```
+
+### MariaDB
+```bash
+mariadb -u root -p < mariadb.sql
+```
+
+### PostgreSQL
+```bash
+sudo -u postgres psql -X -d postgres < postgres.sql
+```
+
+## 3. Website and Application Files
+
+```bash
+for archive in www.tar opt.tar srv.tar; do [ -f "$archive" ] || continue; tar -xpf "$archive" -C / || break; done
+```
+
+## 4. Users, Passwords and Groups
+
+```bash
+tar -xpf users.tar -C /
+```
+
+## 5. SSH Configuration
+
+```bash
+tar -xpf ssh.tar -C /
+sshd -t && systemctl reload sshd
+```
+
+## 6. Cron Jobs
+
+View backed-up cron jobs:
+
+```bash
+tar -tf cron.tar
+```
+
+Remove newly created user cron jobs that were absent from the backup:
+
+```bash
+crontab -u USERNAME -r
+```
+
+Restore original cron jobs:
+
+```bash
+tar -xpf cron.tar -C /
+restorecon -RF /var/spool/cron
+systemctl restart crond
+```
+
+## 7. Firewall
+
+### Firewalld
+```bash
+tar -xpf firewall.tar -C /
+firewall-cmd --reload
+```
+
+### iptables
+```bash
+iptables-restore < iptables.rules
+```
+
+## 8. Systemd Services and Timers
+
+```bash
+tar -xpf systemd.tar -C /
+systemctl daemon-reload
+```
+
+## 9. Home Directories and SSH Keys
+
+```bash
+tar --acls --xattrs --selinux -xpf home.tar -C /
+```
+
+## 10. Sudo Permissions
+
+```bash
+tar -xpf sudo.tar -C /
+visudo -c
+```
+
+## Final Verification
+
+```bash
+sshd -t
+nginx -t
+systemctl --failed
+ss -tulpn
+```
+
+## Important Notes
+
+- Restore only trusted backups.
+- Restoring /etc may revert passwords and security hardening.
+- Restoring archives does not delete newly created malicious files.
+- Database restoration may overwrite existing data.
+- Use the VM console when restoring authentication or firewall configurations.
+- A file-level restoration does not guarantee removal of attacker persistence.
