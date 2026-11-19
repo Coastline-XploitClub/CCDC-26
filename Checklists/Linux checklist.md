@@ -61,7 +61,23 @@ LOCATION IN GITHUB IS     CCDC-26/Scripts/Linux Scripts/backup.sh
   
   Example: scp -r "rocky@192.168.220.30:/home/rocky/Linux CCDC/20261023_010428_enumeration_WEB01" C:\Users\%user%\Downloads
 
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+IN CASE YOU NEED TO BACKUP THIS IS WHAT YOU DO 
 
+- SCP the file into Linux
+
+  EXAMPLE: scp -r "C:\Linux CCDC" rocky@192.168.220.30:/home/rocky/
+   
+- extract: sudo tar -xzpf /path/to/backup.tar.gz -C /root/recovery
+- cd to the extracted folder (example: cd WEB01_backup_20261118_233809/)
+- Run this
+
+tar -xpf configs/etc_backup.tar -C /
+for archive in web/*.tar; do [ -f "$archive" ] || continue; tar -xpf "$archive" -C / || break; done
+for file in /var/spool/cron/*; do [ -f "$file" ] || continue; [ -f "system_state/cron/cron/$(basename "$file")" ] || crontab -u "$(basename "$file")" -r; done
+for file in system_state/cron/cron/*; do [ -f "$file" ] || continue; crontab -u "$(basename "$file")" "$file"; done
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### **3 Assessment** (15 minutes MAX)
                                
